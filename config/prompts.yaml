@@ -1,0 +1,82 @@
+# NOTE: This is a rough draft of the prompts configuration file. 
+# The actual content and structure may evolve as we iterate on the system design and gather feedback from initial testing. 
+# The key is to maintain a clear separation between system-level instructions (persona and output format) and user-level instructions (specific analysis tasks).
+
+# =============================================================================
+# System Prompts (Persona and Output Enforcement)
+# =============================================================================
+system_prompts:
+  swing_trader: |
+    You are a professional hedge fund analyst and proprietary trader specializing in technofundamental swing trading, utilizing methodologies from Mark Minervini (VCP) and William O'Neil (CAN SLIM). 
+    
+    You will be provided with raw fundamental data in JSON format and high-resolution chart images (Daily and Weekly timeframes) for a specific stock.
+    
+    CRITICAL INSTRUCTION: You must respond ONLY with a valid, strictly formatted JSON object. Do not include introductory text, conversational filler, or markdown code blocks (e.g., no ```json). Your response will be parsed programmatically.
+
+# =============================================================================
+# User Prompts (Specific Analysis Instructions)
+# =============================================================================
+user_prompts:
+  
+  # 1. The "Master Analyst" Comprehensive Prompt (Best for the EOD Batch Scanner)
+  master_analyst: |
+    Analyze the following stock: {ticker}.
+    
+    FUNDAMENTAL DATA PAYLOAD:
+    {fundamentals}
+    
+    CHART CONTEXT:
+    I have attached the 1-Year Daily chart and the 5-Year Weekly chart for {ticker}. The charts include volume and key moving averages (50-day, 150-day, 200-day).
+    
+    Perform a complete Quantamental analysis based on the provided data and images:
+    
+    Part 1: Fundamental Health (Based on JSON payload)
+    - Analyze recent revenue and EPS growth (look for 20%+ acceleration).
+    - Evaluate gross and operating margins—are they expanding?
+    - Identify any 'New' catalysts or institutional sponsorship metrics provided.
+    
+    Part 2: Price Action & Market Structure (Based on Charts)
+    - Evaluate the current trend. Is it in a 'Stage 2' uptrend (price > 50MA > 150MA > 200MA)?
+    - Identify key Supply and Demand zones on the Daily and Weekly timeframes.
+    - Look for Volatility Contraction Patterns (VCP). Are the 'cheats' or 'pivots' tightening?
+    - Analyze volume—look for 'pocket pivots' or high-volume breakouts vs. low-volume pullbacks.
+    
+    Part 3: The Verdict
+    Synthesize your findings and output the exact JSON schema requested, including a confident entry Pivot Point, a logical Stop Loss level based on recent swing lows, and a Confidence Score (1-10) based on how perfectly the fundamentals and technicals align.
+
+  # 2. The "CAN SLIM" Growth Prompt
+  can_slim_growth: |
+    Perform a strict CAN SLIM analysis on {ticker}.
+    
+    FUNDAMENTAL DATA PAYLOAD:
+    {fundamentals}
+    
+    CHART CONTEXT:
+    I have attached the required price and volume charts.
+    
+    Analyze the following pillars:
+    - C & A: Compare current quarterly and annual earnings growth to its industry peers based on the data.
+    - N: Identify any recent catalysts or 'New' developments.
+    - S: Analyze the Supply/Demand via recent trading volume on the attached charts. Look for institutional accumulation.
+    - L: Is this a Leader or a Laggard in its sector? 
+    - I: Check for recent institutional buying positions.
+    - M: Evaluate the overall market structure shown in the charts. Is this a safe environment for a breakout?
+    
+    Output your final analysis strictly in the requested JSON format.
+
+  # 3. The "Price Action & Entry" Prompt (Best for pure technical setups)
+  price_action_entry: |
+    I am looking for a swing trade entry on {ticker}. 
+    
+    CHART CONTEXT:
+    I have attached the recent Price OHLC data and Volume charts. 
+    CURRENT PRICE METRICS: {technicals}
+    
+    Ignore deep fundamentals for this analysis. Focus purely on technicals:
+    
+    1. Market Structure: Are we making Higher Highs and Higher Lows? Is there a 'Change of Character' (CHoCH) visible on the Daily chart?
+    2. Supply/Demand: Visually identify the 'Point of Control' or the most recent area of heavy volume consolidation.
+    3. The Setup: Classify the current base. Does this look like a Cup-with-Handle, a Flat Base, a High Tight Flag, or a failed pattern?
+    4. Risk/Reward: If I enter at the current price, where is the most logical 'invalidation point' (Stop Loss) where the institutional trend is officially broken?
+    
+    Output your findings strictly in the requested JSON format.
