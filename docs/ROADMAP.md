@@ -20,5 +20,6 @@
 
 ## Phase 3: Advanced Signals & Execution (Future)
 * [ ] Add Short Interest, Insider Buying, and Institutional Ownership data endpoints from FMP to the deterministic screener.
+* [ ] Calculate the anchored VWAP set to after the quarterly earnings release.
 * [ ] Build a historical backtesting module utilizing the locally cached, date-suffixed JSON files to analyze screener efficacy over time.
 * [ ] Implement automated paper trading via the Alpaca API for setups scoring a 9 or 10 on the LLM confidence scale.
