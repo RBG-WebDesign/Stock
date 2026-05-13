@@ -1,5 +1,6 @@
 # src/tqa/charting/builder.py
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import matplotlib.patches as patches
@@ -135,7 +136,8 @@ class ChartBuilder:
             padding = price_range * 0.10
             ylim = (ymin - padding, ymax + padding)
 
-            output_path = os.path.join(self.output_dir, f"{ticker}_daily.png")
+            today = datetime.now().strftime("%Y-%m-%d")
+            output_path = os.path.join(self.output_dir, f"{ticker}_daily_{today}.png")
 
             fig, axes = mpf.plot(
                 plot_df,
@@ -269,7 +271,8 @@ class ChartBuilder:
             padding = price_range * 0.10
             ylim = (ymin - padding, ymax + padding)
 
-            output_path = os.path.join(self.output_dir, f"{ticker}_weekly.png")
+            today = datetime.now().strftime("%Y-%m-%d")
+            output_path = os.path.join(self.output_dir, f"{ticker}_weekly_{today}.png")
 
             fig, axes = mpf.plot(
                 plot_df,
@@ -365,3 +368,20 @@ class ChartBuilder:
             logger.error(f"Error building charts for {ticker}: {e}")
 
         return results
+
+    def check_existing_charts(self, ticker: str) -> Dict[str, str]:
+        """
+        Checks if charts for today already exist on disk.
+        Returns a dict of existing paths if both exist, otherwise empty dict.
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        daily_path = os.path.join(self.output_dir, f"{ticker.upper()}_daily_{today}.png")
+        weekly_path = os.path.join(self.output_dir, f"{ticker.upper()}_weekly_{today}.png")
+
+        if os.path.exists(daily_path) and os.path.exists(weekly_path):
+            logger.debug(f"Charts already exist for {ticker} on {today}.")
+            return {
+                "daily": daily_path,
+                "weekly": weekly_path
+            }
+        return {}

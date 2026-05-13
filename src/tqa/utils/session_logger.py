@@ -1,4 +1,5 @@
 # src/tqa/utils/session_logger.py
+import asyncio
 import json
 import logging
 from datetime import datetime

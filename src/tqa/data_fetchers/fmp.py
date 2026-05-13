@@ -338,6 +338,69 @@ class FMPClient(BaseDataFetcher):
             return data["historical"]
         return data if isinstance(data, list) else []
 
+    async def fetch_income_statement_bulk(self, year: int, period: str) -> List[Dict[str, Any]]:
+        """
+        Fetches income statements for all companies for a given year and period.
+        """
+        endpoint = "income-statement-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {
+            "year": str(year),
+            "period": period.upper()
+        }
+        
+        # We use a special ticker "BULK" for caching bulk results
+        ticker_key = f"BULK_{year}_{period.upper()}"
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        
+        if data and isinstance(data, list):
+            # Proactively cache individual ticker data to avoid redundant fetches later
+            # Note: This is an optimization to fill the local cache from bulk results.
+            for statement in data:
+                symbol = statement.get("symbol")
+                if not symbol: continue
+                
+                # Check if we already have an individual cache for this ticker for today
+                # The bulk fetch already used fetch_with_cache which saved the BULK file.
+                # Now we manually save individual files if they don't exist.
+                indiv_cache_path = self._get_cache_path("income-statement", symbol)
+                if not indiv_cache_path.exists():
+                    try:
+                        # For income-statement endpoint, the data is usually a list of statements.
+                        # Since this bulk call is for a specific year/period, we only have one statement here.
+                        # However, fetch_income_statement normally returns a list (limit 8).
+                        # We'll just cache this single statement in a list format for compatibility.
+                        with open(indiv_cache_path, "w") as f:
+                            json.dump([statement], f, indent=4)
+                    except Exception as e:
+                        logger.error(f"Failed to proactively cache {symbol}: {e}")
+                        
+        return data if data else []
+
+    async def fetch_earnings_surprises_bulk(self, year: int) -> List[Dict[str, Any]]:
+        """
+        Fetches annual earnings surprises for all companies for a given year.
+        """
+        endpoint = "earnings-surprises-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {
+            "year": str(year)
+        }
+        
+        ticker_key = f"BULK_{year}"
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        return data if data else []
+
     async def fetch_ticker_data(self, ticker: str) -> Dict[str, Any]:
         """
         Orchestrates fetching all required data (fundamentals + technicals) for a given ticker concurrently.

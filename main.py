@@ -74,16 +74,46 @@ async def run_pipeline(
             console.print(f"[bold blue]✓[/bold blue] Found {len(universe)} tickers in target market cap range.")
             
             # 2. Staged Filtering (Waterfall: Fundamentals -> Technicals -> Full Data)
-            status.update(f"[bold yellow]Phase 1: Checking fundamentals for {len(universe)} tickers...")
+            status.update(f"[bold yellow]Phase 1: Checking fundamentals for {len(universe)} tickers using bulk API...")
             
-            # Fetch only income statements for initial screening (processed in chunks of 500)
-            income_statements = []
-            chunk_size = 500
-            for i in range(0, len(universe), chunk_size):
-                chunk = universe[i : i + chunk_size]
-                is_tasks = [client.fetch_income_statement(item['symbol']) for item in chunk]
-                chunk_results = await asyncio.gather(*is_tasks)
-                income_statements.extend(chunk_results)
+            # Determine recent quarters for bulk fetch (last 4 quarters to ensure we have enough data)
+            def get_recent_quarters(n=4):
+                now = datetime.now()
+                results = []
+                curr_year = now.year
+                curr_q = (now.month - 1) // 3 + 1
+                for _ in range(n):
+                    curr_q -= 1
+                    if curr_q <= 0:
+                        curr_q = 4
+                        curr_year -= 1
+                    results.append((curr_year, f"Q{curr_q}"))
+                return results
+
+            quarters = get_recent_quarters(4)
+            bulk_tasks = [client.fetch_income_statement_bulk(y, q) for y, q in quarters]
+            bulk_results = await asyncio.gather(*bulk_tasks)
+            
+            # Create a lookup map: ticker -> [latest_q, prev_q, ...]
+            ticker_statements = {}
+            for quarter_data in bulk_results:
+                if not quarter_data: continue
+                for statement in quarter_data:
+                    symbol = statement.get('symbol')
+                    if not symbol: continue
+                    symbol = symbol.upper()
+                    if symbol not in ticker_statements:
+                        ticker_statements[symbol] = []
+                    ticker_statements[symbol].append(statement)
+            
+            # Efficiently ensure statements are sorted by date (newest first)
+            # instead of sorting each list individually, we can sort the bulk data by date once if needed,
+            # but since bulk_results is a list of lists (one per quarter),
+            # and usually we only have 4 quarters, the per-ticker lists are very short (max 4).
+            # So the current O(N * 4 log 4) is actually fine.
+            # However, for consistency and avoiding duplicate logic:
+            for symbol in ticker_statements:
+                ticker_statements[symbol].sort(key=lambda x: x.get('date', ''), reverse=True)
             
             # Apply Fundamental Filter
             screener = Screener(
@@ -92,12 +122,26 @@ async def run_pipeline(
                 min_latest_eps=min_latest_eps
             )
             passed_fund = []
-            for i, item in enumerate(universe):
-                ticker = item['symbol']
-                if screener.check_fundamentals(income_statements[i]):
+            for item in universe:
+                ticker = item['symbol'].upper()
+                statements = ticker_statements.get(ticker, [])
+                
+                # If bulk data missing for this ticker, fallback to individual fetch
+                if not statements:
+                    logger.debug(f"Bulk data missing for {ticker}, falling back to individual fetch.")
+                    statements = await client.fetch_income_statement(ticker)
+                
+                # Ensure we have at least 2 quarters for screening.
+                # Individual fetch (limit 8) usually provides enough, but bulk might only have 1 if
+                # the stock just went public or data is patchy.
+                if len(statements) < 2:
+                    logger.warning(f"Insufficient data for {ticker} fundamentals (need 2+ quarters).")
+                    continue
+
+                if screener.check_fundamentals(statements):
                     passed_fund.append({
                         "ticker": ticker,
-                        "income_statement": income_statements[i]
+                        "income_statement": statements
                     })
             
             console.print(f"[bold blue]✓[/bold blue] {len(passed_fund)} tickers passed fundamental filters.")
@@ -106,15 +150,31 @@ async def run_pipeline(
                 console.print("[bold yellow]No tickers passed the fundamental filters.[/bold yellow]")
                 return
 
-            # Phase 2: Technical Filter (Trend Template)
-            status.update(f"[bold yellow]Phase 2: Checking Trend Template for {len(passed_fund)} tickers...")
+            # Phase 2: Technical Filter (Trend Template) & Chart Check
+            status.update(f"[bold yellow]Phase 2: Checking Trend Template & existing charts for {len(passed_fund)} tickers...")
+            
+            chart_builder = ChartBuilder()
+            passed_tech = []
+            
+            # Identify which tickers have existing charts to skip technical check & charting later
+            for d in passed_fund:
+                ticker = d['ticker']
+                existing_charts = chart_builder.check_existing_charts(ticker)
+                if existing_charts:
+                    d['chart_paths'] = existing_charts
+            
+            # We fetch historical data for ALL survivors of Phase 1.
+            # Even if we have charts, we need the data for technical stats in the LLM prompt.
+            # Note: This will hit the local file cache if fetched previously today.
             hist_tasks = [client.fetch_historical_prices(d['ticker']) for d in passed_fund]
             historical_data = await asyncio.gather(*hist_tasks)
             
-            passed_tech = []
             for i, d in enumerate(passed_fund):
                 d['historical'] = historical_data[i]
-                if screener.check_technicals(d['historical']):
+                # If we already have charts, we skip the technical check (assume it passed today)
+                if d.get('chart_paths'):
+                    passed_tech.append(d)
+                elif screener.check_technicals(d['historical']):
                     passed_tech.append(d)
             
             console.print(f"[bold blue]✓[/bold blue] {len(passed_tech)} tickers passed technical filters.")
@@ -166,10 +226,13 @@ async def run_pipeline(
             console.print(f"[bold blue]✓[/bold blue] Full data fetch complete.")
 
             # 4. Generate Technical Charts
-            status.update(f"[bold cyan]Generating charts for {len(passed_tickers)} tickers...")
-            chart_builder = ChartBuilder()
+            status.update(f"[bold cyan]Generating missing charts for {len(passed_tickers)} tickers...")
             
             for ticker_data in passed_tickers:
+                # If chart_paths already populated from check_existing_charts, skip generation
+                if ticker_data.get('chart_paths'):
+                    continue
+                    
                 ticker = ticker_data['ticker']
                 historical = ticker_data.get('historical', [])
                 if historical:
