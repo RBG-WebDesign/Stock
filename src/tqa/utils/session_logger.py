@@ -24,6 +24,14 @@ class SessionLogger:
         self.prompts_log_path = self.session_dir / "prompts_debug.jsonl"
         self.config_log_path = self.session_dir / "run_config.json"
         
+        # Funnel metrics tracking
+        self.funnel_stats = {
+            "universe_count": 0,
+            "fundamental_passed_count": 0,
+            "technical_passed_count": 0,
+            "final_watchlist_count": 0
+        }
+        
         # Setup session-specific file logger
         self.logger = logging.getLogger(f"session.{session_id}")
         self.logger.setLevel(logging.INFO)
@@ -35,12 +43,41 @@ class SessionLogger:
 
     async def log_config(self, config: Dict[str, Any]):
         """Saves the run configuration and settings."""
+        # Merge funnel stats into config for persistence
+        full_config = {**config, "funnel_stats": self.funnel_stats}
+        
         def write_config():
             with open(self.config_log_path, "w") as f:
-                json.dump(config, f, indent=2)
+                json.dump(full_config, f, indent=2)
         
         await asyncio.to_thread(write_config)
         self.logger.info(f"Configuration saved to {self.config_log_path}")
+
+    def update_funnel_stats(self, **kwargs):
+        """Updates the funnel metrics and persists to run_config.json asynchronously."""
+        self.funnel_stats.update(kwargs)
+        self.logger.info(f"Funnel Stats Updated: {self.funnel_stats}")
+        
+        # Auto-persist funnel stats to run_config.json if it exists (Asynchronously)
+        if self.config_log_path.exists():
+            def persist():
+                try:
+                    with open(self.config_log_path, "r") as f:
+                        config = json.load(f)
+                    config["funnel_stats"] = self.funnel_stats
+                    with open(self.config_log_path, "w") as f:
+                        json.dump(config, f, indent=2)
+                except Exception as e:
+                    self.logger.error(f"Failed to auto-persist funnel stats: {e}")
+            
+            # Since this might be called from sync code in main.py, we use asyncio.create_task
+            # if we are in an event loop, otherwise we just log that we couldn't persist.
+            try:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, persist)
+            except RuntimeError:
+                # No running loop, fallback to sync for initialization phase if needed
+                persist()
 
     def _serialize_response(self, response: Any) -> Any:
         """Safely serializes various response types."""
@@ -70,7 +107,7 @@ class SessionLogger:
         except Exception:
             return "[Unserializable Response]"
 
-    async def log_prompt(self, ticker: str, prompt: str, response: Any, model: str):
+    async def log_prompt(self, ticker: str, prompt: str, response: Any, model: str, include_prompt: bool = True):
         """Logs a single LLM interaction with robust serialization and error handling."""
         try:
             # Validate required fields
@@ -81,7 +118,7 @@ class SessionLogger:
                 "timestamp": datetime.now().isoformat(),
                 "ticker": ticker or "UNKNOWN",
                 "model": model or "UNKNOWN",
-                "prompt": prompt or "",
+                "prompt": prompt if include_prompt else "[PROMPT LOGGING DISABLED]",
                 "response": self._serialize_response(response)
             }
             

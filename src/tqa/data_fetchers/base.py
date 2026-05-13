@@ -127,10 +127,10 @@ class BaseDataFetcher(ABC):
         return data
 
     async def _make_request(
-        self, 
-        url: str, 
-        params: Optional[Dict[str, Any]] = None, 
-        retries: int = 3
+        self,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        retries: int = 8
     ) -> Any:
         """
         Executes a network request with a semaphore and exponential backoff.
@@ -151,9 +151,13 @@ class BaseDataFetcher(ABC):
                         
                         # Retry on rate limits (429) or server errors (5xx)
                         if response.status == 429 or 500 <= response.status < 600:
-                            wait_time = 2 ** (attempt + 1)
+                            # Exponential backoff with jitter
+                            import random
+                            base_wait = 2 ** (attempt + 1)
+                            wait_time = base_wait + (random.random() * 0.5 * base_wait)
+                            
                             status_msg = "Rate limited (429)" if response.status == 429 else f"Server error ({response.status})"
-                            logger.warning(f"{status_msg}. Retrying in {wait_time}s... (Attempt {attempt + 1}/{retries})")
+                            logger.warning(f"{status_msg}. Retrying in {wait_time:.2f}s... (Attempt {attempt + 1}/{retries})")
                             await asyncio.sleep(wait_time)
                             continue
                         

@@ -22,6 +22,8 @@ class CanSlimOutput(BaseModel):
     l_leader_laggard: str = Field(..., description="Assessment of relative strength within its sector.")
     i_institutional_sponsorship: str = Field(..., description="Evaluation of big money backing or fund ownership.")
     m_market_direction: str = Field(..., description="Assessment of the broader market environment.")
+    suggested_entry_pivot: float = Field(..., description="The exact dollar amount for the optimal breakout entry point.")
+    suggested_stop_loss: float = Field(..., description="The exact dollar amount for the invalidation point or stop loss.")
     is_breakout_safe: bool = Field(..., description="True if the current environment and setup support a safe breakout, False otherwise.")
     confidence_score: int = Field(..., ge=1, le=10, description="Overall CAN SLIM grade from 1 to 10.")
 
@@ -32,4 +34,4 @@ class PriceActionEntryOutput(BaseModel):
     point_of_control: str = Field(..., description="The price zone with the heaviest volume consolidation.")
     base_classification: str = Field(..., description="The specific name of the consolidation base.")
     suggested_entry_pivot: float = Field(..., description="The optimal breakout entry price.")
-    invalidation_point_stop_loss: float = Field(..., description="The exact price where the technical setup is broken.")
+    suggested_stop_loss: float = Field(..., description="The exact price where the technical setup is broken.")

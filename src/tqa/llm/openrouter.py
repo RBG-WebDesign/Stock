@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import json
+import random
 from datetime import datetime
 import yaml
 from pathlib import Path
@@ -73,7 +74,8 @@ class OpenRouterClient:
         ticker: str,
         fundamentals: Dict[str, Any],
         chart_paths: Dict[str, str],
-        prompt_key: str = "master_analyst"
+        prompt_key: str = "master_analyst",
+        session_dir: Optional[Path] = None
     ) -> Tuple[Optional[Any], str]:
         """
         Sends fundamental data and charts to OpenRouter for comprehensive analysis.
@@ -145,23 +147,34 @@ class OpenRouterClient:
         # Save payload for debugging before sending
         await self._save_payload(ticker, payload)
 
-        # 5. Execute Request
-        try:
-            if self._session:
-                async with self._session.post(self.base_url, headers=self.headers, json=payload) as response:
-                    analysis = await self._handle_response(response, ticker, output_schema)
-            else:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(self.base_url, headers=self.headers, json=payload) as response:
-                        analysis = await self._handle_response(response, ticker, output_schema)
-            
-            return analysis, formatted_user_prompt
+        # 5. Execute Request with Retries
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(f"Retrying analysis for {ticker} (Attempt {attempt}/{max_retries})...")
+                    # Exponential backoff with jitter
+                    await asyncio.sleep(2 ** attempt + random.uniform(0, 1))
 
-        except Exception as e:
-            logger.error(f"Exception during OpenRouter analysis for {ticker}: {e}")
-            return None, formatted_user_prompt
+                if self._session:
+                    async with self._session.post(self.base_url, headers=self.headers, json=payload) as response:
+                        analysis = await self._handle_response(response, ticker, output_schema, session_dir)
+                else:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(self.base_url, headers=self.headers, json=payload) as response:
+                            analysis = await self._handle_response(response, ticker, output_schema, session_dir)
+                
+                if analysis:
+                    return analysis, formatted_user_prompt
 
-    async def _handle_response(self, response: aiohttp.ClientResponse, ticker: str, schema: Any) -> Optional[Any]:
+            except Exception as e:
+                logger.error(f"Exception during OpenRouter analysis for {ticker} (Attempt {attempt}): {e}")
+                if attempt == max_retries:
+                    return None, formatted_user_prompt
+        
+        return None, formatted_user_prompt
+
+    async def _handle_response(self, response: aiohttp.ClientResponse, ticker: str, schema: Any, session_dir: Optional[Path] = None) -> Optional[Any]:
         """Handles the API response, including error checking and parsing."""
         if response.status != 200:
             error_text = await response.text()
@@ -175,9 +188,9 @@ class OpenRouterClient:
             logger.error(f"Empty response from OpenRouter for {ticker}")
             return None
 
-        return self._parse_and_validate(content, ticker, schema)
+        return await self._parse_and_validate(content, ticker, schema, session_dir)
 
-    def _parse_and_validate(self, content: str, ticker: str, schema: Any) -> Optional[Any]:
+    async def _parse_and_validate(self, content: str, ticker: str, schema: Any, session_dir: Optional[Path] = None) -> Optional[Any]:
         """Robustly parses and validates the LLM output against the provided schema."""
         try:
             # 1. Cleaning: Remove potential markdown code blocks
@@ -196,17 +209,30 @@ class OpenRouterClient:
 
             # 3. Schema Validation
             output = schema.model_validate(data)
-            logger.info(f"Successfully received and validated analysis for {ticker} using {schema.__name__}")
+            logger.debug(f"Successfully received and validated analysis for {ticker} using {schema.__name__}")
             return output
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decoding failed for {ticker}: {e}")
-            logger.debug(f"Raw content: {content}")
-        except ValidationError as e:
-            logger.error(f"Pydantic validation failed for {ticker}: {e}")
-            logger.debug(f"Decoded data: {data}")
-        except Exception as e:
-            logger.error(f"Unexpected error parsing response for {ticker}: {e}")
+        except (json.JSONDecodeError, ValidationError, Exception) as e:
+            error_type = type(e).__name__
+            logger.error(f"{error_type} for {ticker}: {e}")
+            
+            # Save raw content on failure
+            if session_dir:
+                try:
+                    raw_path = session_dir / f"{ticker}_raw_response.txt"
+                    def save_raw():
+                        with open(raw_path, "w") as f:
+                            f.write(content)
+                    await asyncio.to_thread(save_raw)
+                    logger.info(f"Saved raw failed response for {ticker} to {raw_path}")
+                except Exception as ex:
+                    logger.error(f"Failed to save raw response for {ticker}: {ex}")
+            
+            if isinstance(e, json.JSONDecodeError):
+                logger.debug(f"Raw content: {content}")
+            elif isinstance(e, ValidationError):
+                # data is defined here because json.loads(cleaned_content) succeeded if we reach here
+                logger.debug(f"Decoded data: {data}")
         
         return None
 

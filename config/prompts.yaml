@@ -79,6 +79,9 @@ user_prompts:
     - I: Use 'supply_demand.institutional_ownership_percent' and 'institutional_trend'.
     - M: Evaluate the overall market structure shown in the charts. Is the trend constructive?
     
+    Part 2: Execution
+    - Define an optimal "Pivot Point" for entry and a "Stop Loss" based on the base structure and risk/reward.
+    
     Output your final analysis strictly in the CanSlimOutput JSON format.
 
   # 4. The "Price Action & Entry" Prompt (Pure Technicals)

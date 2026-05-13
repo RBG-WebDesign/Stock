@@ -23,8 +23,8 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 ### 2. Screening & Math (`src/tqa/screener/`)
 * **Responsibility:** Act as the "Bouncer." Apply deterministic mathematical filters to narrow the universe to high-probability candidates.
 * **Waterfall Approach:** To optimize performance and API costs, candidates are filtered in sequential phases:
-    1.  **Phase 1: Fundamentals:** Discard stocks without significant YoY EPS or Revenue growth (default > 20%).
-    2.  **Phase 2: Technicals:** Apply the "Trend Template" (e.g., Price > 100 SMA > 200 SMA) to ensure the stock is in a confirmed uptrend.
+    1.  **Phase 1: Fundamentals:** Discard stocks without significant YoY EPS or Revenue growth (default > 20%). Uses absolute EPS thresholds to avoid low-base distortions.
+    2.  **Phase 2: Technicals:** Apply a strict 7-point "Trend Template" (Price > 50 SMA > 100 SMA > 200 SMA, 52-week range relative strength, and 200 SMA uptrend) to ensure the stock is in a confirmed uptrend.
 * **Rule:** No LLM logic or charting logic belongs here. This module only uses data required for initial screening (Income Statements and basic Price History).
 
 ### 3. Visualization (`src/tqa/charting/`)
@@ -40,8 +40,9 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 
 ### 5. Logging & Session Management (`src/tqa/utils/session_logger.py`)
 * **Responsibility:** Ensure full auditability and "reproducibility" of the agentic pipeline.
-* **Mechanism:** Every pipeline run generates a unique session ID. All LLM inputs (prompts), outputs, and configuration settings are saved in a structured format within `data/reports/runs/<session_id>/`.
-* **Rule:** No LLM interaction (request or response) should occur without being logged to the active session. This includes failed attempts, ensuring a complete audit trail for agentic decision-making.
+* **Mechanism:** Every pipeline run generates a unique session ID (e.g., `YYYYMMDD_HHMMSS`). All LLM inputs (prompts), outputs, configuration settings, and execution logs are saved in a structured format within `data/reports/runs/<session_id>/`.
+* **Prompt Debugging:** If the `--save-prompts` flag is used, all raw LLM interactions are appended to `prompts_debug.jsonl` within the session directory.
+* **Rule:** No LLM interaction (request or response) should occur without being logged to the active session when auditing is enabled.
 
 ## State Management and Caching
 

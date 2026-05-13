@@ -7,20 +7,20 @@ from pydantic import Field
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
-MODEL_LIST = [
-    "moonshotai/kimi-k2.5", # Input: $0.40 per 1M tokens, Output: $1.90 per 1M tokens
-    "anthropic/claude-haiku-4.5", # Input: $1.0 per 1M tokens, Output: $5 per 1M tokens
-    "anthropic/claude-opus-4.7", # Input: $5.0 per 1M tokens, Output: $25 per 1M tokens
-    "google/gemini-2.5-flash", # Input: $0.30 per 1M tokens, Output: $2.50 per 1M tokens
-    "google/gemini-3-flash-preview", # Input: $0.50 per 1M tokens, Output: $3.00 per 1M tokens
-    "deepseek/deepseek-v4-pro", # Input: $0.435 per 1M tokens, Output: $0.87 per 1M tokens
-    "deepseek/deepseek-v4-flash", # Input: $0.126 per 1M tokens, Output: $0.252 per 1M tokens
-    "qwen/qwen3.6-plus", # Input: $0.325 per 1M tokens, Output: $1.95 per 1M tokens
-]
-
 class Settings(BaseSettings):
     """Global configuration settings for the Techno-Quantamental Analyzer."""
     
+    MODEL_LIST: list[str] = [
+        "google/gemini-3-flash-preview",
+        "google/gemini-2.5-flash",
+        "qwen/qwen3.6-plus",
+        "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v4-pro",
+        "moonshotai/kimi-k2.5",
+        "anthropic/claude-haiku-4.5",
+        "anthropic/claude-opus-4.7",
+    ]
+
     # --- API Keys ---
     FMP_API_KEY: str = Field(..., description="Financial Modeling Prep API Key")
     OPENROUTER_API_KEY: str = Field(..., description="OpenRouter API Key for sync testing")

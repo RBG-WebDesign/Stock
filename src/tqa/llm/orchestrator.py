@@ -2,6 +2,7 @@
 import asyncio
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from config.settings import settings
@@ -22,15 +23,18 @@ class AnalysisOrchestrator:
     async def analyze_multiple(
         self,
         tickers_data: List[Dict[str, Any]],
-        session: Optional[SessionLogger] = None
+        session: Optional[SessionLogger] = None,
+        save_prompts: bool = False,
+        model: str = settings.DEFAULT_MODEL,
+        prompt_mode: str = settings.DEFAULT_PROMPT_KEY
     ) -> List[Dict[str, Any]]:
         """
         Runs analysis for multiple tickers in parallel with concurrency control.
         """
-        logger.info(f"Starting parallel analysis for {len(tickers_data)} tickers...")
+        logger.info(f"Starting parallel analysis for {len(tickers_data)} tickers using {model}...")
         
-        async with OpenRouterClient() as client:
-            tasks = [self._process_ticker(client, data, session) for data in tickers_data]
+        async with OpenRouterClient(model=model) as client:
+            tasks = [self._process_ticker(client, data, session, save_prompts, prompt_mode=prompt_mode) for data in tickers_data]
             results = await asyncio.gather(*tasks)
             
         logger.info(f"Parallel analysis complete. Processed {len(results)} tickers.")
@@ -40,7 +44,9 @@ class AnalysisOrchestrator:
         self,
         client: OpenRouterClient,
         ticker_data: Dict[str, Any],
-        session: Optional[SessionLogger] = None
+        session: Optional[SessionLogger] = None,
+        save_prompts: bool = False,
+        prompt_mode: str = settings.DEFAULT_PROMPT_KEY
     ) -> Dict[str, Any]:
         """
         Processes a single ticker: analysis and saving report.
@@ -61,16 +67,19 @@ class AnalysisOrchestrator:
                     ticker=ticker,
                     fundamentals=formatted_fundamentals,
                     chart_paths=chart_paths,
-                    prompt_key=settings.DEFAULT_PROMPT_KEY
+                    prompt_key=prompt_mode,
+                    session_dir=session.session_dir if session else None
                 )
 
                 if analysis:
                     ticker_data['analysis'] = analysis
-                    await self._save_report(ticker, analysis)
+                    # Save report to session directory if available, otherwise global reports dir
+                    report_dir = session.session_dir if session else settings.REPORTS_DIR
+                    await self._save_report(ticker, analysis, report_dir)
                     
                     # Log to session if provided
                     if session:
-                        await session.log_prompt(ticker, actual_prompt, analysis, settings.DEFAULT_MODEL)
+                        await session.log_prompt(ticker, actual_prompt, analysis, client.model, include_prompt=save_prompts)
                 else:
                     logger.error(f"Analysis failed for {ticker}")
 
@@ -79,17 +88,17 @@ class AnalysisOrchestrator:
 
         return ticker_data
 
-    async def _save_report(self, ticker: str, analysis: Any):
+    async def _save_report(self, ticker: str, analysis: Any, report_dir: Path):
         """
-        Saves the analysis result to a JSON file in the reports directory.
+        Saves the analysis result to a JSON file in the specified directory.
         """
         try:
             report_date = datetime.now().strftime('%Y-%m-%d')
-            report_path = settings.REPORTS_DIR / f"{ticker}_{report_date}.json"
+            report_path = report_dir / f"{ticker}_{report_date}.json"
             
             # Using a thread pool for file I/O to avoid blocking the event loop
             def save_file():
-                settings.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+                report_dir.mkdir(parents=True, exist_ok=True)
                 with open(report_path, "w") as f:
                     # Check if analysis is a Pydantic model
                     if hasattr(analysis, "model_dump_json"):
@@ -98,6 +107,6 @@ class AnalysisOrchestrator:
                         json.dump(analysis, f, indent=2)
             
             await asyncio.to_thread(save_file)
-            logger.info(f"Analysis report saved for {ticker}: {report_path}")
+            logger.debug(f"Analysis report saved for {ticker}: {report_path}")
         except Exception as e:
             logger.error(f"Failed to save report for {ticker}: {e}")

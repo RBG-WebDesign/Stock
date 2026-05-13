@@ -9,6 +9,7 @@ authors = [{name = "Vincent Rothenberg"}]
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.13.5",
+    "fpdf2>=2.8.7",
     "jupyter>=1.1.1",
     "mplfinance>=0.12.10b0",
     "pandas>=3.0.3",
@@ -17,6 +18,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "rich>=15.0.0",
     "typer>=0.25.1",
+    "questionary>=2.1.0",
 ]
 
 [build-system]
@@ -26,8 +28,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
 ]

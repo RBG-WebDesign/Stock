@@ -67,6 +67,7 @@ Create a `.env` file in the root directory and add your API keys:
 ```env
 FMP_API_KEY=your_fmp_api_key_here
 OPENROUTER_API_KEY=your_openrouter_key_for_testing
+FMP_PLAN=premium # Set to premium to enable high-speed bulk data fetches
 ANTHROPIC_API_KEY=your_anthropic_key_for_batching
 
 ```
@@ -75,20 +76,29 @@ ANTHROPIC_API_KEY=your_anthropic_key_for_batching
 
 ## 🚀 Usage
 
-Run the main asynchronous pipeline after market close to generate the batch payload:
+Run the end-to-end Quantamental scan:
 
 ```bash
-uv run main.py --mode batch
+# Basic scan with default settings
+uv run main.py scan
 
+# Scan with custom limits and EPS filters
+uv run main.py scan --limit 100 --min-eps-growth-pct 25.0 --min-prev-eps 0.05
 ```
 
-To parse the returned batch file and generate the sorted daily markdown report:
+### CLI Options
+
+* `--limit`, `-l`: Max tickers to fetch from the FMP universe.
+* `--min-eps-growth-pct`, `-e`: Minimum YoY EPS growth % threshold.
+* `--min-prev-eps`: Minimum absolute EPS for the previous quarter (prevents low-base distortions).
+* `--min-latest-eps`: Minimum absolute EPS for the most recent quarter.
+* `--save-prompts`, `-s`: Save all LLM prompts and responses to the session directory for auditing.
+
+To generate a report from a completed session (Work in Progress):
 
 ```bash
-uv run generate_report.py --date YYYY-MM-DD
-
+uv run main.py report <session_id>
 ```
-
 ## 🧪 Testing
 
 This project uses `pytest`. To run the tests, ensure you are in the root directory and set the `PYTHONPATH`:

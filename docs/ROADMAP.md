@@ -13,14 +13,14 @@
 * [x] Connect OpenRouter (async via `aiohttp`) to test prompt engineering, base64 payload construction, and Pydantic schema validation.
 * [x] Write `main.py` to orchestrate the pipeline end-to-end for a small test list (e.g., 5 tickers).
 
-## Phase 2: Native Batching & EOD Automation
-* [-] Refactor Screener to include Trend Template (Price > 100MA > 200MA) and Waterfall filtering.
-* [ ] Implement `src/tqa/utils/session_logger.py` for extensive LLM input/output tracking.
-* [ ] Refactor LLM orchestration to bypass OpenRouter and construct native `.jsonl` batch payloads for direct OpenAI/Anthropic API ingestion (leveraging 50% batch discounts).
+## Phase 2: EOD Automation & Refinement (In Progress)
+* [x] Refactor Screener to include 7-point Trend Template and Waterfall filtering.
+* [-] Implement `src/tqa/utils/session_logger.py` for structured session tracking and prompt auditing (Funnel metrics in progress).
+* [x] Implement robust error handling for market data API rate limits (using `asyncio.Semaphore` and exponential backoff).
+* [x] Implement automated cache cleanup to prune stale data.
+* [-] Implement native `.jsonl` batch payloads for OpenAI/Anthropic (currently uses parallel sync calls via OpenRouter).
 * [ ] Implement the batch submission, polling, and retrieval logic within `src/tqa/llm/`.
-* [x] Write robust error handling for market data API rate limits (using `asyncio.Semaphore` and exponential backoff) to support 1,000+ concurrent requests.
-* [x] Implement automated cache cleanup to prune stale data and manage storage footprint.
-* [ ] Implement `generate_report.py` to aggregate the parsed JSON batch results into a sorted Markdown/HTML daily summary.
+* [ ] Implement `generate_report.py` (or `main.py report`) to aggregate results into a sorted Markdown summary.
 * [ ] Set up daily execution triggers (e.g., cron job or GitHub Actions) to run automatically at 5:00 PM EST.
 
 ## Phase 3: Advanced Signals & Execution (Future)

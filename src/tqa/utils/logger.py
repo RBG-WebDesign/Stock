@@ -9,16 +9,23 @@ from config.settings import BASE_DIR
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-def setup_logger(name: str = "TQA", log_level: int = logging.INFO):
+def setup_logger(name: str = "TQA", log_level: int = logging.INFO, console=None):
     """Configures a unified logger for console and file output."""
     
     # Create logger
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
     
-    # Prevent duplicate handlers if setup is called multiple times
+    # If handlers already exist, update the RichHandler console if provided
     if logger.handlers:
-        return logger
+        from rich.logging import RichHandler
+        updated = False
+        for handler in logger.handlers:
+            if isinstance(handler, RichHandler) and console is not None:
+                handler.console = console
+                updated = True
+        if updated:
+            return logger
 
     # Formatting
     formatter = logging.Formatter(
@@ -26,9 +33,10 @@ def setup_logger(name: str = "TQA", log_level: int = logging.INFO):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # 1. Console Handler (Stream to stdout)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
+    # 1. Console Handler (Using RichHandler for better progress bar integration)
+    from rich.logging import RichHandler
+    console_handler = RichHandler(console=console, rich_tracebacks=True)
+    # RichHandler uses its own formatter, but we can set one if we want
     logger.addHandler(console_handler)
 
     # 2. File Handler (Save to logs/ folder)
