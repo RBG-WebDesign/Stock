@@ -26,6 +26,11 @@ class Settings(BaseSettings):
         default="inclusionai/ring-2.6-1t:free", 
         description="The default model string to use for analysis"
     )
+
+    DEFAULT_PROMPT_KEY: str = Field(
+        default="master_analyst",
+        description="The default prompt key from prompts.yaml to use for analysis"
+    )
     
     MAX_CONCURRENT_LLM_REQUESTS: int = Field(
         default=5,
@@ -34,17 +39,17 @@ class Settings(BaseSettings):
 
     # --- Cache Settings ---
     CACHE_CLEANUP_DAYS: int = Field(
-        default=7,
+        default=365,
         description="Number of days to keep raw data in cache"
     )
 
     # --- LLM Payload Settings ---
     NEWS_SUMMARY_MAX_CHARS: int = Field(
-        default=200,
+        default=500,
         description="Maximum characters for news article summaries"
     )
     MAX_RECENT_ARTICLES: int = Field(
-        default=3,
+        default=5,
         description="Number of recent news articles to include in LLM payload"
     )
 

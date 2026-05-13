@@ -77,3 +77,6 @@ coverage.xml
 *.log
 .pytest_cache/
 htmlcov/
+
+
+*.png

@@ -12,7 +12,7 @@ from tqa.utils.logger import logger
 class ChartBuilder:
     """
     Generates high-contrast technical charts for Vision LLM analysis.
-    Supports both Daily (1-Year) and Weekly (5-Year) timeframes.
+    Supports both Daily (1-Year) and Weekly (3-Year) timeframes.
     """
 
     def __init__(self, output_dir: str = "data/charts"):
@@ -145,7 +145,6 @@ class ChartBuilder:
                 volume=True,
                 ylabel_lower='Volume',
                 addplot=apds,
-                savefig=dict(fname=output_path, dpi=150, bbox_inches='tight'),
                 tight_layout=True,
                 panel_ratios=(4, 1),
                 returnfig=True,
@@ -154,9 +153,18 @@ class ChartBuilder:
 
             ax_price = axes[0]
 
+            # Set z-order: SMAs beneath candles
+            for line in ax_price.get_lines():
+                line.set_zorder(2)
+
             # Price axis: RIGHT side
             ax_price.yaxis.tick_right()
             ax_price.yaxis.set_label_position("right")
+
+            # Add x-axis padding
+            left, right = ax_price.get_xlim()
+            padding = (right - left) * 0.05
+            ax_price.set_xlim(left - padding, right + padding)
 
             # "USD" label above the right (price) axis
             ax_price.text(1.025, 1.00, "USD", transform=ax_price.transAxes,
@@ -229,8 +237,8 @@ class ChartBuilder:
             weekly_df['SMA40'] = weekly_df['Close'].rolling(window=40).mean()
             weekly_df['VolSMA10'] = weekly_df['Volume'].rolling(window=10).mean()
 
-            # Slice last 5 years (approx 260 weeks)
-            plot_df = weekly_df.tail(260).copy()
+            # Slice last 3 years (approx 156 weeks)
+            plot_df = weekly_df.tail(156).copy()
             last_date = plot_df.index[-1].strftime('%Y-%m-%d')
 
             if len(plot_df) < 10:
@@ -271,7 +279,6 @@ class ChartBuilder:
                 volume=True,
                 ylabel_lower='Volume',
                 addplot=apds,
-                savefig=dict(fname=output_path, dpi=150, bbox_inches='tight'),
                 tight_layout=True,
                 panel_ratios=(4, 1),
                 returnfig=True,
@@ -280,12 +287,21 @@ class ChartBuilder:
 
             ax_price = axes[0]
 
+            # Set z-order: SMAs beneath candles
+            for line in ax_price.get_lines():
+                line.set_zorder(2)
+
             # Price axis: RIGHT side
             ax_price.yaxis.tick_right()
             ax_price.yaxis.set_label_position("right")
 
+            # Add x-axis padding
+            left, right = ax_price.get_xlim()
+            padding = (right - left) * 0.05
+            ax_price.set_xlim(left - padding, right + padding)
+
             # "USD" label above the right (price) axis
-            ax_price.text(1.0, 1.02, "USD", transform=ax_price.transAxes,
+            ax_price.text(1.025, 1.00, "USD", transform=ax_price.transAxes,
                           fontsize=9, fontweight='bold', ha='center', va='bottom')
 
             # % Change axis: LEFT side via secondary_yaxis (no twinx)
@@ -318,8 +334,8 @@ class ChartBuilder:
                     verticalalignment='top', fontweight='bold', zorder=5
                 )
 
-            fig.suptitle(f"{ticker} - Weekly (5-Year) - {last_date}",
-                         fontsize=12, fontweight='bold', y=0.98)
+            fig.suptitle(f"{ticker} - Weekly (3-Year) - {last_date}",
+                         fontsize=12, fontweight='bold', y=1.01)
             fig.savefig(output_path, dpi=150, bbox_inches='tight')
 
             logger.info(f"Successfully saved weekly chart: {output_path}")

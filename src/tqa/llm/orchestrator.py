@@ -50,7 +50,8 @@ class AnalysisOrchestrator:
                 analysis = await client.analyze_ticker(
                     ticker=ticker,
                     fundamentals=formatted_fundamentals,
-                    chart_paths=chart_paths
+                    chart_paths=chart_paths,
+                    prompt_key=settings.DEFAULT_PROMPT_KEY
                 )
 
                 if analysis:
@@ -64,7 +65,7 @@ class AnalysisOrchestrator:
 
         return ticker_data
 
-    async def _save_report(self, ticker: str, analysis: MasterAnalystOutput):
+    async def _save_report(self, ticker: str, analysis: Any):
         """
         Saves the analysis result to a JSON file in the reports directory.
         """
@@ -76,7 +77,11 @@ class AnalysisOrchestrator:
             def save_file():
                 settings.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
                 with open(report_path, "w") as f:
-                    f.write(analysis.model_dump_json(indent=2))
+                    # Check if analysis is a Pydantic model
+                    if hasattr(analysis, "model_dump_json"):
+                        f.write(analysis.model_dump_json(indent=2))
+                    else:
+                        json.dump(analysis, f, indent=2)
             
             await asyncio.to_thread(save_file)
             logger.info(f"Analysis report saved for {ticker}: {report_path}")

@@ -274,12 +274,12 @@ class FMPClient(BaseDataFetcher):
             return data[0]
         return data if data else {}
 
-    async def fetch_historical_prices(self, ticker: str, years: int = 2) -> List[Dict[str, Any]]:
+    async def fetch_historical_prices(self, ticker: str, years: int = 4) -> List[Dict[str, Any]]:
         """Fetches OHLCV data for charting and local indicator calculation."""
         endpoint = "historical-price-eod/full"
         url = f"{self.BASE_URL}/{endpoint}"
         
-        # Fetching 2 years by default to ensure we have enough data for long-term SMAs and Weekly charts
+        # Fetching 4 years by default to ensure we have enough data for 3-year weekly charts + leading SMAs
         start_date = (datetime.now() - timedelta(days=365 * years)).strftime('%Y-%m-%d')
         end_date = datetime.now().strftime('%Y-%m-%d')
         

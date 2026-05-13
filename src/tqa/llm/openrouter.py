@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import aiohttp
 from pydantic import ValidationError
 
-from config.schemas import MasterAnalystOutput
+from config.schemas import MasterAnalystOutput, CanSlimOutput, PriceActionEntryOutput
 from config.settings import settings, BASE_DIR
 from tqa.utils.logger import logger
 
@@ -73,11 +73,11 @@ class OpenRouterClient:
         fundamentals: Dict[str, Any],
         chart_paths: Dict[str, str],
         prompt_key: str = "master_analyst"
-    ) -> Optional[MasterAnalystOutput]:
+    ) -> Optional[Any]:
         """
         Sends fundamental data and charts to OpenRouter for comprehensive analysis.
         """
-        logger.info(f"Initiating OpenRouter analysis for {ticker} using {self.model}...")
+        logger.info(f"Initiating OpenRouter analysis for {ticker} using {self.model} via {prompt_key}...")
 
         # 1. Prepare Prompts
         system_prompt = self.prompts_config.get("system_prompts", {}).get("swing_trader", "")
@@ -87,13 +87,22 @@ class OpenRouterClient:
             logger.error(f"Missing prompt configuration for system_prompt or {prompt_key}")
             return None
 
+        # 2. Select Schema based on prompt_key
+        schema_map = {
+            "master_analyst": MasterAnalystOutput,
+            "institutional_accumulator": MasterAnalystOutput,
+            "can_slim_growth": CanSlimOutput,
+            "price_action_entry": PriceActionEntryOutput
+        }
+        output_schema = schema_map.get(prompt_key, MasterAnalystOutput)
+
         # Format user prompt with ticker and fundamental JSON
         formatted_user_prompt = user_template.format(
             ticker=ticker,
             fundamentals=json.dumps(fundamentals, indent=2)
         )
 
-        # 2. Encode Charts
+        # 3. Encode Charts
         try:
             daily_b64 = await encode_image_base64(chart_paths.get("daily", ""))
             weekly_b64 = await encode_image_base64(chart_paths.get("weekly", ""))
@@ -101,7 +110,7 @@ class OpenRouterClient:
             logger.error(f"Error encoding charts for {ticker}: {e}")
             return None
 
-        # 3. Construct Payload
+        # 4. Construct Payload
         payload = {
             "model": self.model,
             "messages": [
@@ -125,28 +134,27 @@ class OpenRouterClient:
                 "type": "json_schema",
                 "json_schema": {
                     "name": "analyst_response",
-                    "schema": MasterAnalystOutput.model_json_schema(),
+                    "schema": output_schema.model_json_schema(),
                     "strict": True
                 }
             }
         }
 
-        # 4. Execute Request
+        # 5. Execute Request
         try:
-            # Use internal session if available, otherwise create one (for backward compatibility/individual calls)
             if self._session:
                 async with self._session.post(self.base_url, headers=self.headers, json=payload) as response:
-                    return await self._handle_response(response, ticker)
+                    return await self._handle_response(response, ticker, output_schema)
             else:
                 async with aiohttp.ClientSession() as session:
                     async with session.post(self.base_url, headers=self.headers, json=payload) as response:
-                        return await self._handle_response(response, ticker)
+                        return await self._handle_response(response, ticker, output_schema)
 
         except Exception as e:
             logger.error(f"Exception during OpenRouter analysis for {ticker}: {e}")
             return None
 
-    async def _handle_response(self, response: aiohttp.ClientResponse, ticker: str) -> Optional[MasterAnalystOutput]:
+    async def _handle_response(self, response: aiohttp.ClientResponse, ticker: str, schema: Any) -> Optional[Any]:
         """Handles the API response, including error checking and parsing."""
         if response.status != 200:
             error_text = await response.text()
@@ -160,10 +168,10 @@ class OpenRouterClient:
             logger.error(f"Empty response from OpenRouter for {ticker}")
             return None
 
-        return self._parse_and_validate(content, ticker)
+        return self._parse_and_validate(content, ticker, schema)
 
-    def _parse_and_validate(self, content: str, ticker: str) -> Optional[MasterAnalystOutput]:
-        """Robustly parses and validates the LLM output."""
+    def _parse_and_validate(self, content: str, ticker: str, schema: Any) -> Optional[Any]:
+        """Robustly parses and validates the LLM output against the provided schema."""
         try:
             # 1. Cleaning: Remove potential markdown code blocks
             cleaned_content = content.strip()
@@ -180,8 +188,8 @@ class OpenRouterClient:
             data = json.loads(cleaned_content)
 
             # 3. Schema Validation
-            output = MasterAnalystOutput.model_validate(data)
-            logger.info(f"Successfully received and validated analysis for {ticker}")
+            output = schema.model_validate(data)
+            logger.info(f"Successfully received and validated analysis for {ticker} using {schema.__name__}")
             return output
 
         except json.JSONDecodeError as e:

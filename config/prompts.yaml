@@ -1,26 +1,30 @@
-# NOTE: This is a rough draft of the prompts configuration file. 
-# The actual content and structure may evolve as we iterate on the system design and gather feedback from initial testing. 
-# The key is to maintain a clear separation between system-level instructions (persona and output format) and user-level instructions (specific analysis tasks).
+# NOTE: This is a refined version of the prompts configuration file. 
+# It emphasizes Technofundamental synergy, VCP patterns, and Institutional Accumulation.
 
 # =============================================================================
 # System Prompts (Persona and Output Enforcement)
 # =============================================================================
 system_prompts:
   swing_trader: |
-    You are a professional hedge fund analyst and proprietary trader specializing in technofundamental swing trading, utilizing methodologies from Mark Minervini (VCP) and William O'Neil (CAN SLIM). 
+    You are a professional hedge fund analyst and proprietary trader specializing in "Technofundamental" swing trading. 
+    Your methodology is a strict synthesis of William O'Neil's CAN SLIM and Mark Minervini's Volatility Contraction Pattern (VCP).
+
+    CORE MISSION: Identify high-conviction growth stocks (small/mid-cap) that are emerging from sound bases or showing clear signs of quiet institutional accumulation.
     
-    You will be provided with raw fundamental data in JSON format and high-resolution chart images (Daily and Weekly timeframes) for a specific stock.
-    
-    CRITICAL INSTRUCTION: You must respond ONLY with a valid, strictly formatted JSON object. Do not include introductory text, conversational filler, or markdown code blocks (e.g., no ```json). Your response will be parsed programmatically.
+    CRITICAL CONSTRAINTS:
+    - Prioritize current price action over theoretical potential.
+    - Be ruthless: If a setup is sloppy, call it out.
+    - Use the provided JSON data for quantitative precision and the Charts for visual confirmation of "dry ups" and "tightness."
+    - Respond ONLY with a valid, strictly formatted JSON object. Do not include introductory text, conversational filler, or markdown code blocks (e.g., no ```json).
 
 # =============================================================================
 # User Prompts (Specific Analysis Instructions)
 # =============================================================================
 user_prompts:
   
-  # 1. The "Master Analyst" Comprehensive Prompt (Best for the EOD Batch Scanner)
+  # 1. The "Master Analyst" Comprehensive Prompt (The Primary Workhorse)
   master_analyst: |
-    Analyze the following stock: {ticker}.
+    Analyze the following stock for a potential "Stage 2" breakout entry: {ticker}.
     
     FUNDAMENTAL DATA PAYLOAD:
     {fundamentals}
@@ -28,57 +32,66 @@ user_prompts:
     CHART CONTEXT:
     I have attached the 1-Year Daily chart and the 5-Year Weekly chart for {ticker}. The charts include volume and key moving averages (50-day, 150-day, 200-day).
     
-    Perform a complete Quantamental analysis based on the provided data and images:
+    Perform a complete Quantamental analysis:
     
-    Part 1: Fundamental Health (Based on JSON payload)
-    - Analyze recent revenue and EPS growth. Look for 20%+ Year-over-Year (Y/Y) and Quarter-over-Quarter (Q/Q) acceleration in the 'recent_performance' section.
-    - Evaluate gross and operating margins—are they expanding or contracting?
-    - Analyze institutional sponsorship in the 'supply_demand' section. Look for increasing ownership percentages and 'Increasing' trends.
-    - Check 'earnings_integrity' for a history of positive surprises, which indicates conservative guidance and institutional accumulation.
-    - Factor in 'future_outlook' analyst estimates—does the growth trajectory continue?
+    Part 1: Quality & Catalyst (Based on JSON)
+    - Analyze 'recent_performance' for 20%+ Y/Y and Q/Q acceleration.
+    - Check 'financial_health': Are Altman-Z (>3.0) and Piotroski (>6) scores indicating high quality?
+    - Evaluate 'recent_news' and 'earnings_integrity' for a "New" catalyst (positive surprises or business pivots).
+    - Analyze 'supply_demand': Is the 'institutional_trend' Increasing?
     
-    Part 2: Price Action & Market Structure (Based on Charts)
-    - Evaluate the current trend. Is it in a 'Stage 2' uptrend (price > 50MA > 150MA > 200MA)?
-    - Identify key Supply and Demand zones on the Daily and Weekly timeframes.
-    - Look for Volatility Contraction Patterns (VCP). Are the 'cheats' or 'pivots' tightening?
-    - Analyze volume—look for 'pocket pivots' or high-volume breakouts vs. low-volume pullbacks.
+    Part 2: The Footprint (Based on Charts)
+    - Trend Template: Confirm Price > 50MA > 150MA > 200MA. Is the 200MA trending up for at least 1 month?
+    - Volatility Contraction Pattern (VCP): Count the contractions (e.g., T1, T2, T3). Is the price "tightening" on the right side of the base?
+    - Volume Analysis: Look for "Dry Up" (extremely low volume) during the most recent price contraction or "Pocket Pivots" (high volume spikes coming off moving averages).
     
     Part 3: The Verdict
     Synthesize your findings and output the exact JSON schema requested, including a confident entry Pivot Point, a logical Stop Loss level based on recent swing lows, and a Confidence Score (1-10) based on how perfectly the fundamentals and technicals align.
 
-  # 2. The "CAN SLIM" Growth Prompt
-  can_slim_growth: |
-    Perform a strict CAN SLIM analysis on {ticker}.
+  # 2. The "Institutional Accumulator" Prompt (Focused on finding setups before the breakout)
+  institutional_accumulator: |
+    Evaluate if {ticker} is currently in a "Steady Institutional Accumulation" phase.
     
     FUNDAMENTAL DATA PAYLOAD:
     {fundamentals}
     
-    CHART CONTEXT:
-    I have attached the required price and volume charts.
+    ANALYSIS STEPS:
+    1. Institutional Trend: Analyze 'supply_demand.institutional_trend' and ownership %. Is big money quietly moving in?
+    2. Pocket Pivots: Identify any volume spikes on the charts that occur within the consolidation base, specifically those coming from the 10-day or 50-day moving averages.
+    3. Blue Chip Backing: Check 'analyst_sentiment'. Are reputable firms maintaining "Outperform" or "Overweight" ratings?
+    4. Price/Volume Footprint: On the Daily chart, do you see more "Wide-Range Up Days" on high volume than "Down Days" on high volume? This indicates accumulation.
+    5. Base Tightness: Is the stock forming a "cheat" or a "handle" with very low volatility?
+    
+    Output your findings strictly in the MasterAnalystOutput JSON format.
+
+  # 3. The "CAN SLIM" Growth Prompt
+  can_slim_growth: |
+    Perform a strict CAN SLIM audit on {ticker}.
+    
+    FUNDAMENTAL DATA PAYLOAD:
+    {fundamentals}
     
     Analyze the following pillars:
-    - C & A: Analyze 'recent_performance' (Y/Y and Q/Q). Look for EPS and Revenue growth exceeding 20-25%. Verify if 'future_outlook' supports continued expansion.
-    - N: Identify any recent catalysts. Check the 'earnings_integrity' for recent positive surprises which often act as catalysts.
-    - S: Analyze the Supply/Demand. Check 'supply_demand.float' and visual volume accumulation on charts.
-    - L: Is this a Leader or a Laggard? (Assess based on growth rates and price action relative to peers if mentioned).
-    - I: Evaluate Institutional Sponsorship. Check 'supply_demand.institutional_ownership_percent' and 'institutional_trend'.
-    - M: Evaluate the overall market structure shown in the charts. Is this a safe environment for a breakout?
+    - C & A: Use 'recent_performance' (Y/Y and Q/Q). Look for EPS and Revenue growth exceeding 20-25%. Verify if 'future_outlook' supports expansion.
+    - N: Identify catalysts via 'recent_news' and 'earnings_integrity' (positive surprises acting as "New" drivers).
+    - S: Analyze Supply/Demand. Check 'supply_demand.float' and visual volume accumulation on charts. Smaller floats are preferred.
+    - L: Assessment of relative strength. Use 'price_performance' (1M, 3M, 6M) to see if it is outperforming peers/market.
+    - I: Use 'supply_demand.institutional_ownership_percent' and 'institutional_trend'.
+    - M: Evaluate the overall market structure shown in the charts. Is the trend constructive?
     
-    Output your final analysis strictly in the requested JSON format.
+    Output your final analysis strictly in the CanSlimOutput JSON format.
 
-  # 3. The "Price Action & Entry" Prompt (Best for pure technical setups)
+  # 4. The "Price Action & Entry" Prompt (Pure Technicals)
   price_action_entry: |
-    I am looking for a swing trade entry on {ticker}. 
+    Identify a high-probability swing trade entry for {ticker} focusing purely on technicals.
     
     CHART CONTEXT:
     I have attached the recent Price OHLC data and Volume charts. 
     CURRENT PRICE METRICS: {technicals}
     
-    Ignore deep fundamentals for this analysis. Focus purely on technicals:
+    1. Market Structure: Are we making Higher Highs and Higher Lows? Is there a "Change of Character" (CHoCH) visible?
+    2. Supply/Demand: Identify the price zone with the heaviest volume consolidation (Point of Control).
+    3. Base Classification: Is this a Cup-with-Handle, a Flat Base, a High Tight Flag, or a VCP?
+    4. Risk/Reward: Define the optimal breakout "Pivot Point" and a "Stop Loss" where the setup is officially invalidated.
     
-    1. Market Structure: Are we making Higher Highs and Higher Lows? Is there a 'Change of Character' (CHoCH) visible on the Daily chart?
-    2. Supply/Demand: Visually identify the 'Point of Control' or the most recent area of heavy volume consolidation.
-    3. The Setup: Classify the current base. Does this look like a Cup-with-Handle, a Flat Base, a High Tight Flag, or a failed pattern?
-    4. Risk/Reward: If I enter at the current price, where is the most logical 'invalidation point' (Stop Loss) where the institutional trend is officially broken?
-    
-    Output your findings strictly in the requested JSON format.
+    Output your findings strictly in the PriceActionEntryOutput JSON format.
