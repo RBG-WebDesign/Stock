@@ -21,17 +21,27 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 * **Execution:** Must support async methods (e.g., `async def fetch_ticker_data()`).
 
 ### 2. Screening & Math (`src/tqa/screener/`)
-* **Responsibility:** Act as the "Bouncer." Apply deterministic filters (e.g., EPS > 20%, Price > 50 SMA).
-* **Rule:** No LLM logic or charting logic belongs here. This module outputs a clean list of `ticker` strings that survived the filter.
+* **Responsibility:** Act as the "Bouncer." Apply deterministic mathematical filters to narrow the universe to high-probability candidates.
+* **Waterfall Approach:** To optimize performance and API costs, candidates are filtered in sequential phases:
+    1.  **Phase 1: Fundamentals:** Discard stocks without significant YoY EPS or Revenue growth (default > 20%).
+    2.  **Phase 2: Technicals:** Apply the "Trend Template" (e.g., Price > 100 SMA > 200 SMA) to ensure the stock is in a confirmed uptrend.
+* **Rule:** No LLM logic or charting logic belongs here. This module only uses data required for initial screening (Income Statements and basic Price History).
 
 ### 3. Visualization (`src/tqa/charting/`)
 * **Responsibility:** Consume OHLCV DataFrames and output high-contrast PNG images.
 * **Rule:** Images are saved locally to `data/charts/`. Charting functions must not make their own API calls; they rely purely on data passed from the orchestrator.
 
 ### 4. LLM Orchestration & Batching (`src/tqa/llm/`)
-* **Responsibility:** Pre-process raw fundamentals into calculated growth metrics (via `src/tqa/utils/data_formatter.py`), base64 encode charts, and inject both into `config/prompts.yaml`.
-* **Provider Integration:** We bypass OpenRouter for this stage and communicate directly with native provider Batch APIs (e.g., OpenAI or Anthropic) to leverage 50% batch token discounts. 
-* **Rule:** All parsed LLM outputs must be validated against the Pydantic models defined in `config/schemas.py` immediately upon receipt from the completed batch file.
+* **Responsibility:** Manage the final analysis pipeline for screening survivors.
+* **Timing & Data Flow:** Deep data fetching (Key Metrics, Financial Ratios, News) occurs **after** a ticker passes all screening stages but **before** it is submitted for LLM analysis. This ensures we only pay for "expensive" data and tokens for valid candidates.
+* **Process:** Pre-process deep fundamentals into calculated growth metrics (via `src/tqa/utils/data_formatter.py`), base64 encode technical charts, and inject both into `config/prompts.yaml`.
+* **Execution:** Currently uses `OpenRouterClient` for parallel asynchronous analysis. Production target (as per ADR 003) is to leverage native provider Batch APIs to minimize costs (50% discount).
+* **Rule:** All parsed LLM outputs must be validated against the Pydantic models defined in `config/schemas.py`.
+
+### 5. Logging & Session Management (`src/tqa/utils/session_logger.py`)
+* **Responsibility:** Ensure full auditability and "reproducibility" of the agentic pipeline.
+* **Mechanism:** Every pipeline run generates a unique session ID. All LLM inputs (prompts), outputs, and configuration settings are saved in a structured format within `data/reports/runs/<session_id>/`.
+* **Rule:** No LLM interaction (request or response) should occur without being logged to the active session. This includes failed attempts, ensuring a complete audit trail for agentic decision-making.
 
 ## State Management and Caching
 

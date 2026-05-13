@@ -233,7 +233,7 @@ class ChartBuilder:
             # Calculate SMAs on the FULL weekly dataframe
             weekly_df = weekly_df.copy()
             weekly_df['SMA10'] = weekly_df['Close'].rolling(window=10).mean()
-            weekly_df['SMA30'] = weekly_df['Close'].rolling(window=30).mean()
+            weekly_df['SMA20'] = weekly_df['Close'].rolling(window=20).mean()
             weekly_df['SMA40'] = weekly_df['Close'].rolling(window=40).mean()
             weekly_df['VolSMA10'] = weekly_df['Volume'].rolling(window=10).mean()
 
@@ -248,15 +248,15 @@ class ChartBuilder:
             latest_prices = {
                 'Price': plot_df['Close'].iloc[-1],
                 'SMA10': plot_df['SMA10'].iloc[-1],
-                'SMA30': plot_df['SMA30'].iloc[-1],
+                'SMA20': plot_df['SMA20'].iloc[-1],
                 'SMA40': plot_df['SMA40'].iloc[-1]
             }
 
             apds = []
             if not plot_df['SMA10'].isnull().all():
                 apds.append(mpf.make_addplot(plot_df['SMA10'], color='blue', width=1.2))
-            if not plot_df['SMA30'].isnull().all():
-                apds.append(mpf.make_addplot(plot_df['SMA30'], color='orange', width=1.2))
+            if not plot_df['SMA20'].isnull().all():
+                apds.append(mpf.make_addplot(plot_df['SMA20'], color='orange', width=1.2))
             if not plot_df['SMA40'].isnull().all():
                 apds.append(mpf.make_addplot(plot_df['SMA40'], color='red', width=1.5))
             if not plot_df['VolSMA10'].isnull().all():
@@ -325,7 +325,7 @@ class ChartBuilder:
             )
 
             for i, (label, color) in enumerate([
-                ('SMA10', 'blue'), ('SMA30', 'orange'), ('SMA40', 'red')
+                ('SMA10', 'blue'), ('SMA20', 'orange'), ('SMA40', 'red')
             ]):
                 ax_price.text(
                     x_pos, y_start - (i + 1) * y_step,

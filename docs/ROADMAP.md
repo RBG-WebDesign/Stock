@@ -14,6 +14,8 @@
 * [x] Write `main.py` to orchestrate the pipeline end-to-end for a small test list (e.g., 5 tickers).
 
 ## Phase 2: Native Batching & EOD Automation
+* [-] Refactor Screener to include Trend Template (Price > 100MA > 200MA) and Waterfall filtering.
+* [ ] Implement `src/tqa/utils/session_logger.py` for extensive LLM input/output tracking.
 * [ ] Refactor LLM orchestration to bypass OpenRouter and construct native `.jsonl` batch payloads for direct OpenAI/Anthropic API ingestion (leveraging 50% batch discounts).
 * [ ] Implement the batch submission, polling, and retrieval logic within `src/tqa/llm/`.
 * [x] Write robust error handling for market data API rate limits (using `asyncio.Semaphore` and exponential backoff) to support 1,000+ concurrent requests.
@@ -22,6 +24,7 @@
 * [ ] Set up daily execution triggers (e.g., cron job or GitHub Actions) to run automatically at 5:00 PM EST.
 
 ## Phase 3: Advanced Signals & Execution (Future)
+* [ ] Implement Relative Strength (RS) filter comparing ticker performance against S&P 500 (SPY).
 * [ ] Add Short Interest, Insider Buying, and Institutional Ownership data endpoints from FMP to the deterministic screener.
 * [ ] Calculate the anchored VWAP set to after the quarterly earnings release.
 * [ ] Build a historical backtesting module utilizing the locally cached, date-suffixed JSON files to analyze screener efficacy over time.

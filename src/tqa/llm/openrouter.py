@@ -2,9 +2,10 @@
 import asyncio
 import base64
 import json
+from datetime import datetime
 import yaml
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 from pydantic import ValidationError
@@ -73,9 +74,10 @@ class OpenRouterClient:
         fundamentals: Dict[str, Any],
         chart_paths: Dict[str, str],
         prompt_key: str = "master_analyst"
-    ) -> Optional[Any]:
+    ) -> Tuple[Optional[Any], str]:
         """
         Sends fundamental data and charts to OpenRouter for comprehensive analysis.
+        Returns a tuple of (analysis_result, prompt_string).
         """
         logger.info(f"Initiating OpenRouter analysis for {ticker} using {self.model} via {prompt_key}...")
 
@@ -85,7 +87,7 @@ class OpenRouterClient:
 
         if not system_prompt or not user_template:
             logger.error(f"Missing prompt configuration for system_prompt or {prompt_key}")
-            return None
+            return None, ""
 
         # 2. Select Schema based on prompt_key
         schema_map = {
@@ -108,7 +110,7 @@ class OpenRouterClient:
             weekly_b64 = await encode_image_base64(chart_paths.get("weekly", ""))
         except Exception as e:
             logger.error(f"Error encoding charts for {ticker}: {e}")
-            return None
+            return None, formatted_user_prompt
 
         # 4. Construct Payload
         payload = {
@@ -140,19 +142,24 @@ class OpenRouterClient:
             }
         }
 
+        # Save payload for debugging before sending
+        await self._save_payload(ticker, payload)
+
         # 5. Execute Request
         try:
             if self._session:
                 async with self._session.post(self.base_url, headers=self.headers, json=payload) as response:
-                    return await self._handle_response(response, ticker, output_schema)
+                    analysis = await self._handle_response(response, ticker, output_schema)
             else:
                 async with aiohttp.ClientSession() as session:
                     async with session.post(self.base_url, headers=self.headers, json=payload) as response:
-                        return await self._handle_response(response, ticker, output_schema)
+                        analysis = await self._handle_response(response, ticker, output_schema)
+            
+            return analysis, formatted_user_prompt
 
         except Exception as e:
             logger.error(f"Exception during OpenRouter analysis for {ticker}: {e}")
-            return None
+            return None, formatted_user_prompt
 
     async def _handle_response(self, response: aiohttp.ClientResponse, ticker: str, schema: Any) -> Optional[Any]:
         """Handles the API response, including error checking and parsing."""
@@ -200,5 +207,23 @@ class OpenRouterClient:
             logger.debug(f"Decoded data: {data}")
         except Exception as e:
             logger.error(f"Unexpected error parsing response for {ticker}: {e}")
+        
+        return None
+
+    async def _save_payload(self, ticker: str, payload: Dict[str, Any]):
+        """Saves the raw JSON request payload to the payloads directory for debugging."""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{ticker}_{timestamp}.json"
+            filepath = settings.PAYLOADS_DIR / filename
+
+            def write_json():
+                with open(filepath, "w") as f:
+                    json.dump(payload, f, indent=2)
+
+            await asyncio.to_thread(write_json)
+            logger.debug(f"Saved request payload to {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to save request payload for {ticker}: {e}")
 
         return None

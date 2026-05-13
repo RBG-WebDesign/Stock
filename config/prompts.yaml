@@ -30,7 +30,7 @@ user_prompts:
     {fundamentals}
     
     CHART CONTEXT:
-    I have attached the 1-Year Daily chart and the 5-Year Weekly chart for {ticker}. The charts include volume and key moving averages (50-day, 150-day, 200-day).
+    I have attached the 1-Year Daily chart and the 5-Year Weekly chart for {ticker}. The charts include volume and key moving averages (50-day, 100-day, 200-day).
     
     Perform a complete Quantamental analysis:
     
@@ -41,7 +41,7 @@ user_prompts:
     - Analyze 'supply_demand': Is the 'institutional_trend' Increasing?
     
     Part 2: The Footprint (Based on Charts)
-    - Trend Template: Confirm Price > 50MA > 150MA > 200MA. Is the 200MA trending up for at least 1 month?
+    - Trend Template: Confirm Price > 50MA > 100MA > 200MA. Is the 200MA trending up for at least 1 month?
     - Volatility Contraction Pattern (VCP): Count the contractions (e.g., T1, T2, T3). Is the price "tightening" on the right side of the base?
     - Volume Analysis: Look for "Dry Up" (extremely low volume) during the most recent price contraction or "Pocket Pivots" (high volume spikes coming off moving averages).
     

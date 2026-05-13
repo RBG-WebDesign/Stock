@@ -257,6 +257,43 @@ class FMPClient(BaseDataFetcher):
         )
         return data if data else []
 
+    async def fetch_batch_quotes(self, tickers: List[str]) -> List[Dict[str, Any]]:
+        """
+        Fetches real-time quotes for a list of tickers in a single batch call.
+        FMP supports up to 50 symbols per request.
+        """
+        if not tickers:
+            return []
+            
+        chunk_size = 50
+        chunks = [tickers[i:i + chunk_size] for i in range(0, len(tickers), chunk_size)]
+        
+        async def fetch_chunk(chunk):
+            symbols = ",".join([t.upper() for t in chunk])
+            endpoint = "quote"
+            url = f"{self.BASE_URL}/{endpoint}/{symbols}"
+            
+            # We don't cache batch quotes as they are real-time and transient for screening
+            session = await self._get_session()
+            async with self._semaphore:
+                async with session.get(url, params={"apikey": self.api_key}) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    else:
+                        logger.error(f"Batch quote fetch failed for {symbols}: {response.status}")
+                        return []
+
+        tasks = [fetch_chunk(chunk) for chunk in chunks]
+        results = await asyncio.gather(*tasks)
+        
+        # Flatten the list of lists
+        all_quotes = []
+        for result in results:
+            if isinstance(result, list):
+                all_quotes.extend(result)
+        
+        return all_quotes
+
     async def fetch_stock_price_change(self, ticker: str) -> Dict[str, Any]:
         """Fetches stock price change metrics."""
         endpoint = "stock-price-change"

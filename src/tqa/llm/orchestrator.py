@@ -9,6 +9,7 @@ from tqa.utils.data_formatter import format_fundamentals_for_llm
 from config.schemas import MasterAnalystOutput
 from tqa.llm.openrouter import OpenRouterClient
 from tqa.utils.logger import logger
+from tqa.utils.session_logger import SessionLogger
 
 class AnalysisOrchestrator:
     """
@@ -18,20 +19,29 @@ class AnalysisOrchestrator:
     def __init__(self, semaphore_limit: int = settings.MAX_CONCURRENT_LLM_REQUESTS):
         self.semaphore = asyncio.Semaphore(semaphore_limit)
 
-    async def analyze_multiple(self, tickers_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def analyze_multiple(
+        self,
+        tickers_data: List[Dict[str, Any]],
+        session: Optional[SessionLogger] = None
+    ) -> List[Dict[str, Any]]:
         """
         Runs analysis for multiple tickers in parallel with concurrency control.
         """
         logger.info(f"Starting parallel analysis for {len(tickers_data)} tickers...")
         
         async with OpenRouterClient() as client:
-            tasks = [self._process_ticker(client, data) for data in tickers_data]
+            tasks = [self._process_ticker(client, data, session) for data in tickers_data]
             results = await asyncio.gather(*tasks)
             
         logger.info(f"Parallel analysis complete. Processed {len(results)} tickers.")
         return results
 
-    async def _process_ticker(self, client: OpenRouterClient, ticker_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_ticker(
+        self,
+        client: OpenRouterClient,
+        ticker_data: Dict[str, Any],
+        session: Optional[SessionLogger] = None
+    ) -> Dict[str, Any]:
         """
         Processes a single ticker: analysis and saving report.
         """
@@ -47,7 +57,7 @@ class AnalysisOrchestrator:
                 # Format fundamentals to include pre-calculated metrics for better LLM performance
                 formatted_fundamentals = format_fundamentals_for_llm(ticker_data)
                 
-                analysis = await client.analyze_ticker(
+                analysis, actual_prompt = await client.analyze_ticker(
                     ticker=ticker,
                     fundamentals=formatted_fundamentals,
                     chart_paths=chart_paths,
@@ -57,6 +67,10 @@ class AnalysisOrchestrator:
                 if analysis:
                     ticker_data['analysis'] = analysis
                     await self._save_report(ticker, analysis)
+                    
+                    # Log to session if provided
+                    if session:
+                        await session.log_prompt(ticker, actual_prompt, analysis, settings.DEFAULT_MODEL)
                 else:
                     logger.error(f"Analysis failed for {ticker}")
 

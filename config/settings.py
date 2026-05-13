@@ -7,6 +7,17 @@ from pydantic import Field
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
+MODEL_LIST = [
+    "moonshotai/kimi-k2.5", # Input: $0.40 per 1M tokens, Output: $1.90 per 1M tokens
+    "anthropic/claude-haiku-4.5", # Input: $1.0 per 1M tokens, Output: $5 per 1M tokens
+    "anthropic/claude-opus-4.7", # Input: $5.0 per 1M tokens, Output: $25 per 1M tokens
+    "google/gemini-2.5-flash", # Input: $0.30 per 1M tokens, Output: $2.50 per 1M tokens
+    "google/gemini-3-flash-preview", # Input: $0.50 per 1M tokens, Output: $3.00 per 1M tokens
+    "deepseek/deepseek-v4-pro", # Input: $0.435 per 1M tokens, Output: $0.87 per 1M tokens
+    "deepseek/deepseek-v4-flash", # Input: $0.126 per 1M tokens, Output: $0.252 per 1M tokens
+    "qwen/qwen3.6-plus", # Input: $0.325 per 1M tokens, Output: $1.95 per 1M tokens
+]
+
 class Settings(BaseSettings):
     """Global configuration settings for the Techno-Quantamental Analyzer."""
     
@@ -23,7 +34,7 @@ class Settings(BaseSettings):
     
     # --- Pipeline Settings ---
     DEFAULT_MODEL: str = Field(
-        default="inclusionai/ring-2.6-1t:free", 
+        default="moonshotai/kimi-k2.5", 
         description="The default model string to use for analysis"
     )
 
@@ -33,7 +44,7 @@ class Settings(BaseSettings):
     )
     
     MAX_CONCURRENT_LLM_REQUESTS: int = Field(
-        default=5,
+        default=10,
         description="Maximum number of concurrent LLM requests"
     )
 
@@ -49,7 +60,7 @@ class Settings(BaseSettings):
         description="Maximum characters for news article summaries"
     )
     MAX_RECENT_ARTICLES: int = Field(
-        default=5,
+        default=10,
         description="Number of recent news articles to include in LLM payload"
     )
 
