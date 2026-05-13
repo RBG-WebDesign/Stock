@@ -8,9 +8,10 @@ The pipeline filters the entire US equity universe down to a highly curated list
 
 ## 🧠 Agentic Context (For AI Assistants)
 
-If you are an AI coding assistant (Cursor, Copilot, Aider) working in this repository, **do not begin coding until you have read the documents in the `docs/` folder.** * Start with `docs/README.md` and `docs/ARCHITECTURE.md` to understand the strict module boundaries and file-based caching strategy.
+If you are an AI coding assistant (Kilo Code, Copilot, Cursor) working in this repository, **do not begin coding until you have read the documents in the `docs/` folder.** * Start with `docs/README.md` and `docs/ARCHITECTURE.md` to understand the strict module boundaries and file-based caching strategy.
 
 * See `docs/ROADMAP.md` for the current development phase.
+* **Jupyter Notebook Preference**: When writing code for prototyping notebooks, avoid encapsulating logic into functions. Keep variables in the global scope to allow for easier inspection and persistence across cells.
 * Endpoint documentation for FMP is located in `docs/fmp-api/`.
 
 ## ⚙️ Features

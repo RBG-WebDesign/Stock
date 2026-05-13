@@ -14,19 +14,38 @@ class Settings(BaseSettings):
     FMP_API_KEY: str = Field(..., description="Financial Modeling Prep API Key")
     OPENROUTER_API_KEY: str = Field(..., description="OpenRouter API Key for sync testing")
     
+    # FMP Subscription Plan (starter, premium)
+    FMP_PLAN: str = Field(default="starter", description="FMP Subscription Plan")
+
     # Native keys for Phase 2 Batch API integration
     ANTHROPIC_API_KEY: str = Field(default="", description="Native Anthropic API Key")
     OPENAI_API_KEY: str = Field(default="", description="Native OpenAI API Key")
     
     # --- Pipeline Settings ---
     DEFAULT_MODEL: str = Field(
-        default="anthropic/claude-3.5-sonnet", 
+        default="inclusionai/ring-2.6-1t:free", 
         description="The default model string to use for analysis"
     )
     
     MAX_CONCURRENT_LLM_REQUESTS: int = Field(
         default=5,
         description="Maximum number of concurrent LLM requests"
+    )
+
+    # --- Cache Settings ---
+    CACHE_CLEANUP_DAYS: int = Field(
+        default=7,
+        description="Number of days to keep raw data in cache"
+    )
+
+    # --- LLM Payload Settings ---
+    NEWS_SUMMARY_MAX_CHARS: int = Field(
+        default=200,
+        description="Maximum characters for news article summaries"
+    )
+    MAX_RECENT_ARTICLES: int = Field(
+        default=3,
+        description="Number of recent news articles to include in LLM payload"
     )
 
     # --- Directory Paths ---

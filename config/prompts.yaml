@@ -31,9 +31,11 @@ user_prompts:
     Perform a complete Quantamental analysis based on the provided data and images:
     
     Part 1: Fundamental Health (Based on JSON payload)
-    - Analyze recent revenue and EPS growth (look for 20%+ acceleration).
-    - Evaluate gross and operating margins—are they expanding?
-    - Identify any 'New' catalysts or institutional sponsorship metrics provided.
+    - Analyze recent revenue and EPS growth. Look for 20%+ Year-over-Year (Y/Y) and Quarter-over-Quarter (Q/Q) acceleration in the 'recent_performance' section.
+    - Evaluate gross and operating margins—are they expanding or contracting?
+    - Analyze institutional sponsorship in the 'supply_demand' section. Look for increasing ownership percentages and 'Increasing' trends.
+    - Check 'earnings_integrity' for a history of positive surprises, which indicates conservative guidance and institutional accumulation.
+    - Factor in 'future_outlook' analyst estimates—does the growth trajectory continue?
     
     Part 2: Price Action & Market Structure (Based on Charts)
     - Evaluate the current trend. Is it in a 'Stage 2' uptrend (price > 50MA > 150MA > 200MA)?
@@ -55,11 +57,11 @@ user_prompts:
     I have attached the required price and volume charts.
     
     Analyze the following pillars:
-    - C & A: Compare current quarterly and annual earnings growth to its industry peers based on the data.
-    - N: Identify any recent catalysts or 'New' developments.
-    - S: Analyze the Supply/Demand via recent trading volume on the attached charts. Look for institutional accumulation.
-    - L: Is this a Leader or a Laggard in its sector? 
-    - I: Check for recent institutional buying positions.
+    - C & A: Analyze 'recent_performance' (Y/Y and Q/Q). Look for EPS and Revenue growth exceeding 20-25%. Verify if 'future_outlook' supports continued expansion.
+    - N: Identify any recent catalysts. Check the 'earnings_integrity' for recent positive surprises which often act as catalysts.
+    - S: Analyze the Supply/Demand. Check 'supply_demand.float' and visual volume accumulation on charts.
+    - L: Is this a Leader or a Laggard? (Assess based on growth rates and price action relative to peers if mentioned).
+    - I: Evaluate Institutional Sponsorship. Check 'supply_demand.institutional_ownership_percent' and 'institutional_trend'.
     - M: Evaluate the overall market structure shown in the charts. Is this a safe environment for a breakout?
     
     Output your final analysis strictly in the requested JSON format.

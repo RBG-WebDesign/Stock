@@ -16,7 +16,7 @@ The pipeline processes between 1,000 and 2,000 small-cap equities. Performance i
 The system is strictly modular. An AI agent modifying this codebase must respect these boundaries:
 
 ### 1. Data Fetching (`src/tqa/data_fetchers/`)
-* **Responsibility:** Ingest raw market data (OHLCV) and fundamental metrics (EPS, margins) concurrently.
+* **Responsibility:** Ingest raw market data (OHLCV) and comprehensive fundamental metrics (Income Statements, Institutional Ownership, Earnings Surprises, Analyst Estimates) concurrently.
 * **Rule:** All external API clients must inherit from `base.py`. No data transformation happens here; just fetching and standardizing the output into raw dictionaries or DataFrames.
 * **Execution:** Must support async methods (e.g., `async def fetch_ticker_data()`).
 
@@ -29,7 +29,7 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 * **Rule:** Images are saved locally to `data/charts/`. Charting functions must not make their own API calls; they rely purely on data passed from the orchestrator.
 
 ### 4. LLM Orchestration & Batching (`src/tqa/llm/`)
-* **Responsibility:** Base64 encode the generated charts, inject them into `config/prompts.yaml`, and compile `.jsonl` payload files.
+* **Responsibility:** Pre-process raw fundamentals into calculated growth metrics (via `src/tqa/utils/data_formatter.py`), base64 encode charts, and inject both into `config/prompts.yaml`.
 * **Provider Integration:** We bypass OpenRouter for this stage and communicate directly with native provider Batch APIs (e.g., OpenAI or Anthropic) to leverage 50% batch token discounts. 
 * **Rule:** All parsed LLM outputs must be validated against the Pydantic models defined in `config/schemas.py` immediately upon receipt from the completed batch file.
 

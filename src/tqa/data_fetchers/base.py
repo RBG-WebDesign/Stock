@@ -24,7 +24,7 @@ class BaseDataFetcher(ABC):
         # Semaphore prevents 429 errors by limiting concurrent network requests
         self._semaphore = asyncio.Semaphore(semaphore_limit)
         self._session: Optional[aiohttp.ClientSession] = None
-        self._cleanup_old_cache()
+        self._cleanup_old_cache(days=settings.CACHE_CLEANUP_DAYS)
 
     async def __aenter__(self: T) -> T:
         await self._get_session()
@@ -57,7 +57,7 @@ class BaseDataFetcher(ABC):
         endpoint_dir.mkdir(parents=True, exist_ok=True)
         return endpoint_dir / f"{ticker.upper()}_{today}.json"
 
-    def _cleanup_old_cache(self, days: int = 7) -> None:
+    def _cleanup_old_cache(self, days: int) -> None:
         """
         Iterates through the RAW_DATA_DIR and deletes JSON files older than 'days'.
         Expects files to be in the format: TICKER_YYYY-MM-DD.json

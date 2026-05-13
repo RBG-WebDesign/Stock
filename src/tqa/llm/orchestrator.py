@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from config.settings import settings
+from tqa.utils.data_formatter import format_fundamentals_for_llm
 from config.schemas import MasterAnalystOutput
 from tqa.llm.openrouter import OpenRouterClient
 from tqa.utils.logger import logger
@@ -43,9 +44,12 @@ class AnalysisOrchestrator:
 
         async with self.semaphore:
             try:
+                # Format fundamentals to include pre-calculated metrics for better LLM performance
+                formatted_fundamentals = format_fundamentals_for_llm(ticker_data)
+                
                 analysis = await client.analyze_ticker(
                     ticker=ticker,
-                    fundamentals=ticker_data,
+                    fundamentals=formatted_fundamentals,
                     chart_paths=chart_paths
                 )
 
