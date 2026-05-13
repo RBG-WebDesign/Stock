@@ -24,6 +24,11 @@ class Settings(BaseSettings):
         description="The default model string to use for analysis"
     )
     
+    MAX_CONCURRENT_LLM_REQUESTS: int = Field(
+        default=5,
+        description="Maximum number of concurrent LLM requests"
+    )
+
     # --- Directory Paths ---
     # These are used for our isolated file-based caching strategy
     RAW_DATA_DIR: Path = DATA_DIR / "raw"

@@ -10,8 +10,8 @@
 * [x] Implement robust logging with correct path resolution across different execution contexts.
 * [x] Establish verified integration tests for core components (`tests/test_data_fetchers.py`).
 * [x] Implement `mplfinance` charting for 1-Year Daily and 5-Year Weekly timeframes, saving PNGs to `data/charts/`.
-* [ ] Connect OpenRouter (synchronous API) to test prompt engineering, base64 payload construction, and Pydantic schema validation.
-* [ ] Write `main.py` to orchestrate the pipeline end-to-end for a small test list (e.g., 5 tickers).
+* [x] Connect OpenRouter (async via `aiohttp`) to test prompt engineering, base64 payload construction, and Pydantic schema validation.
+* [x] Write `main.py` to orchestrate the pipeline end-to-end for a small test list (e.g., 5 tickers).
 
 ## Phase 2: Native Batching & EOD Automation
 * [ ] Refactor LLM orchestration to bypass OpenRouter and construct native `.jsonl` batch payloads for direct OpenAI/Anthropic API ingestion (leveraging 50% batch discounts).

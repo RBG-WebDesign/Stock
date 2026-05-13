@@ -14,6 +14,7 @@ from config.settings import settings
 from tqa.data_fetchers.fmp import FMPClient
 from tqa.screener.universe import Screener
 from tqa.charting.builder import ChartBuilder
+from tqa.llm.orchestrator import AnalysisOrchestrator
 
 # Initialize Rich Console and Typer
 console = Console()
@@ -126,11 +127,19 @@ async def run_pipeline(universe_limit: int, min_eps: float):
                 ticker = ticker_data['ticker']
                 historical = ticker_data.get('historical', [])
                 if historical:
-                    chart_builder.build_all(ticker, historical)
+                    chart_paths = chart_builder.build_all(ticker, historical)
+                    ticker_data['chart_paths'] = chart_paths
             
             console.print(f"[bold blue]✓[/bold blue] Chart generation complete.")
 
-    # 5. Display Summary Table
+            # 5. LLM Analysis via Orchestrator
+            status.update(f"[bold magenta]Phase 4: Performing Parallel LLM Analysis for {len(passed_tickers)} tickers...")
+            orchestrator = AnalysisOrchestrator()
+            passed_tickers = await orchestrator.analyze_multiple(passed_tickers)
+
+            console.print(f"[bold blue]✓[/bold blue] LLM Analysis complete.")
+
+    # 6. Display Summary Table
     table = Table(title=f"Screener Results ({datetime.now().strftime('%Y-%m-%d')})")
     table.add_column("Ticker", style="cyan")
     table.add_column("Price", justify="right")

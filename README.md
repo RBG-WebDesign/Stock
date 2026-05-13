@@ -88,3 +88,17 @@ To parse the returned batch file and generate the sorted daily markdown report:
 uv run generate_report.py --date YYYY-MM-DD
 
 ```
+
+## 🧪 Testing
+
+This project uses `pytest`. To run the tests, ensure you are in the root directory and set the `PYTHONPATH`:
+
+```bash
+PYTHONPATH=. uv run pytest
+```
+
+Alternatively, you can run specific tests:
+
+```bash
+PYTHONPATH=. uv run pytest tests/test_orchestrator.py
+```
