@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fpdf import FPDF
 from datetime import datetime
 from config.settings import settings
-from tqa.utils.data_formatter import format_large_number
+from tqa.utils.data_formatter import format_large_number, format_currency
 
 class PDFGenerator(FPDF):
     def __init__(self):
@@ -157,6 +157,8 @@ class PDFGenerator(FPDF):
         def format_mc(val):
             try:
                 if val is None or val == "None": return "None"
+                # Use USD for config display since screener thresholds are usually conceptualized in USD or local
+                # but for simplicity we'll keep the $ here or omit it if we don't know the intended currency of the config
                 return f"${int(val):,}"
             except:
                 return "None"
@@ -336,16 +338,19 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
             pdf.ln(5)
 
             # --- Company Metadata Row 2 ---
+            currency = profile.get('currency', 'USD')
             mkt_cap = profile.get('marketCap') or profile.get('mktCap')
-            mkt_cap_str = f"${format_large_number(mkt_cap)}" if mkt_cap else "N/A"
+            mkt_cap_str = f"{format_currency(mkt_cap, currency)}" if mkt_cap else "N/A"
+            # Since format_currency includes decimals and large number suffixes are usually better for market cap:
+            mkt_cap_str = f"{currency} {format_large_number(mkt_cap)}" if mkt_cap else "N/A"
             pdf.write_labeled_value("Market Cap", mkt_cap_str)
 
             rev = profile.get('recent_revenue')
-            rev_str = f"${format_large_number(rev)}" if rev else "N/A"
+            rev_str = f"{currency} {format_large_number(rev)}" if rev else "N/A"
             pdf.write_labeled_value("Revenue", rev_str)
             
             earn = profile.get('recent_earnings')
-            earn_str = f"${format_large_number(earn)}" if earn else "N/A"
+            earn_str = f"{currency} {format_large_number(earn)}" if earn else "N/A"
             pdf.write_labeled_value("Earnings", earn_str, is_last=True)
             pdf.ln(6)
             
@@ -365,10 +370,11 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
         box_h = 14   # Reduced from 15 → 14
         spacing = 2
 
-        pdf.draw_metric_box("Entry Pivot", f"${res.get('suggested_entry_pivot', 'N/A')}", pdf.theme_success, w=box_w, h=box_h)
+        currency = profile.get('currency', 'USD')
+        pdf.draw_metric_box("Entry Pivot", format_currency(res.get('suggested_entry_pivot'), currency), pdf.theme_success, w=box_w, h=box_h)
 
         pdf.set_xy(pdf.get_x() + spacing, y_metrics)
-        pdf.draw_metric_box("Stop Loss", f"${res.get('suggested_stop_loss', 'N/A')}", pdf.theme_danger, w=box_w, h=box_h)
+        pdf.draw_metric_box("Stop Loss", format_currency(res.get('suggested_stop_loss'), currency), pdf.theme_danger, w=box_w, h=box_h)
 
         entry = res.get('suggested_entry_pivot')
         stop = res.get('suggested_stop_loss')
@@ -377,7 +383,7 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
             risk = entry - stop
             reward = entry * 0.20
             rr_val = f"{(reward / risk):.2f}:1"
-            target_val = f"${(entry * 1.20):.2f}"
+            target_val = format_currency(entry * 1.20, currency)
 
         pdf.set_xy(pdf.get_x() + spacing, y_metrics)
         pdf.draw_metric_box("Target (20%)", target_val, w=box_w, h=box_h)
@@ -389,60 +395,99 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
 
         epw = pdf.epw
 
-        # --- Section writer ---
+        # --- Section writer (Large Block) ---
         def write_section(title, text, color=None):
-            pdf.set_font(pdf.default_font, "B", 10)  # Reduced from 11 → 10
+            pdf.set_font(pdf.default_font, "B", 10)
             if color:
                 pdf.set_text_color(*color)
             else:
                 pdf.set_text_color(*pdf.theme_primary)
-            pdf.cell(0, 6, title, ln=True)  # Reduced from 8 → 6
+            pdf.cell(0, 4, title, ln=True)
             pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + epw, pdf.get_y())
-            pdf.ln(2)  # Reduced from 2 (unchanged, already tight)
+            pdf.ln(0.5)
             
-            pdf.set_font(pdf.default_font, "", 9)  # Reduced from 10 → 9
+            pdf.set_font(pdf.default_font, "", 9)
             pdf.set_text_color(*pdf.theme_text)
-            pdf.multi_cell(epw, 4, str(text))  # Reduced line height from 5 → 4
-            pdf.ln(3)  # Reduced from 5 → 3
+            pdf.multi_cell(epw, 4, str(text))
+            pdf.ln(1)
 
-        tech_setup = res.get('primary_pattern', res.get('base_classification', 'N/A'))
-        fund_catalyst = res.get('fundamental_catalyst', 'N/A')
-        bull_thesis = res.get('bull_case', 'N/A')
-        bear_risks = res.get('bear_case_risks', 'N/A')
+        # --- Inline Section writer (Compact) ---
+        def write_inline_section(title, text, color=None):
+            pdf.set_font(pdf.default_font, "B", 9)
+            if color:
+                pdf.set_text_color(*color)
+            else:
+                pdf.set_text_color(*pdf.theme_primary)
+            
+            # Write label and then text inline with minimal trailing space
+            pdf.write(4, f"{title}: ")
+            pdf.set_font(pdf.default_font, "", 9)
+            pdf.set_text_color(*pdf.theme_text)
+            pdf.write(4, f"{str(text)}\n")
+            pdf.ln(0.5)
 
-        if 'c_current_earnings' in res:
-            can_slim_text = (
-                f"C: {res.get('c_current_earnings')}\n"
-                f"A: {res.get('a_annual_earnings')}\n"
-                f"N: {res.get('n_new_catalyst')}\n"
-                f"S: {res.get('s_supply_demand')}\n"
-                f"L: {res.get('l_leader_laggard')}\n"
-                f"I: {res.get('i_institutional_sponsorship')}\n"
-                f"M: {res.get('m_market_direction')}"
-            )
-            write_section("CAN SLIM Analysis", can_slim_text)
-        else:
-            write_section("Technical Setup", tech_setup)
-            write_section("Fundamental Catalyst", fund_catalyst)
-            write_section("Investment Thesis (Bull Case)", bull_thesis)
+        # Define fields to exclude from dynamic section rendering (already shown in header/metrics)
+        exclude_fields = {
+            'ticker', 'confidence_score', 'suggested_entry_pivot', 'suggested_stop_loss',
+            'is_breakout_safe'
+        }
 
-            # --- Risk / Bear Case box ---
-            curr_y = pdf.get_y()
-            pdf.set_fill_color(255, 245, 245)
+        # Fields to use compact rendering for
+        compact_fields = {
+            'c_current_earnings', 'a_annual_earnings', 'n_new_catalyst',
+            's_supply_demand', 'l_leader_laggard', 'i_institutional_sponsorship',
+            'm_market_direction',
+            'institutional_trend_analysis', 'pocket_pivots_identified',
+            'analyst_sentiment_summary', 'price_volume_footprint',
+            'base_tightness_grading'
+        }
 
-            lines = pdf.multi_cell(epw - 4, 4, f"RISK ASSESSMENT: {bear_risks}", split_only=True)
-            header_height = 6   # Matches the reduced title cell height
-            content_height = len(lines) * 4   # Matches the reduced line height
-            h = header_height + content_height + 5  # Tighter padding (was 6)
-
-            if curr_y + h > 250:
-                pdf.add_page()
+        # Dynamic Section Rendering based on schema fields
+        for field_name, field_value in res.items():
+            if field_name in exclude_fields or not field_value:
+                continue
+            
+            # Format field name for title (Compact labels)
+            if field_name == 'c_current_earnings': title = "Current Quarterly Earnings"
+            elif field_name == 'a_annual_earnings': title = "Annual Earnings Growth"
+            elif field_name == 'n_new_catalyst': title = "New Catalyst"
+            elif field_name == 's_supply_demand': title = "Supply and Demand"
+            elif field_name == 'l_leader_laggard': title = "Leader or Laggard"
+            elif field_name == 'i_institutional_sponsorship': title = "Institutional Sponsorship"
+            elif field_name == 'm_market_direction': title = "Market Direction"
+            else:
+                title = field_name.replace('_', ' ').title()
+            
+            # Use color for specific sections
+            section_color = None
+            if 'risk' in field_name.lower() or 'bear' in field_name.lower():
+                section_color = pdf.theme_danger
+                
+                # Render risks in a highlighted box
                 curr_y = pdf.get_y()
-
-            pdf.rect(pdf.l_margin, curr_y, epw, h, 'F')
-            pdf.set_xy(pdf.l_margin, curr_y + 2)
-            write_section("Risk Assessment (Bear Case)", bear_risks, pdf.theme_danger)
-            pdf.set_y(curr_y + h + 4)  # Reduced trailing gap from 5 → 4
+                pdf.set_fill_color(255, 245, 245)
+                
+                pdf.set_font(pdf.default_font, "", 9)
+                lines = pdf.multi_cell(epw - 4, 4, str(field_value), split_only=True)
+                h = (len(lines) * 4)
+                
+                if curr_y + h > 250:
+                    pdf.add_page()
+                    curr_y = pdf.get_y()
+                
+                pdf.rect(pdf.l_margin, curr_y, epw, h, 'F')
+                pdf.set_xy(pdf.l_margin, curr_y + 1)
+                write_section(title, field_value, color=section_color)
+                pdf.set_y(curr_y + h + 2)
+            else:
+                # Optimized color logic to avoid accidental green on pillars
+                if field_name in ['bull_case', 'fundamental_catalyst']:
+                    section_color = pdf.theme_success
+                
+                if field_name in compact_fields:
+                    write_inline_section(title, field_value, color=section_color)
+                else:
+                    write_section(title, field_value, color=section_color)
 
         # --- Charts ---
         chart_dir = Path("data/charts")
@@ -479,7 +524,8 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
         
     timestamp = datetime.now().strftime("%H%M%S")
     conf_str = str(min_confidence).replace('.', 'p')
-    output_path = session_dir / f"TQA_Report_{session_id}_c{conf_str}_{timestamp}.pdf"
+    # Save directly to data/reports as requested, instead of the session subfolder
+    output_path = settings.REPORTS_DIR / f"TQA_Report_{session_id}_c{conf_str}_{timestamp}.pdf"
     
     pdf.output(str(output_path))
     return output_path

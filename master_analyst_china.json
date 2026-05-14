@@ -1,10 +1,10 @@
 {
   "pipeline": {
-    "universe_limit": 1000,
+    "universe_limit": 10000,
     "model": "google/gemini-3-flash-preview",
     "prompt_mode": "master_analyst",
     "save_prompts": false,
-    "exchanges": "NASDAQ,NYSE",
+    "exchanges": "SHZ,SHH",
     "news_summary_max_chars": 500,
     "max_recent_articles": 10
   },

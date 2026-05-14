@@ -11,7 +11,12 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 from pydantic import ValidationError
 
-from config.schemas import MasterAnalystOutput, CanSlimOutput, PriceActionEntryOutput
+from config.schemas import (
+    MasterAnalystOutput,
+    CanSlimOutput,
+    PriceActionEntryOutput,
+    InstitutionalAccumulatorOutput
+)
 from config.settings import settings, BASE_DIR
 from tqa.utils.logger import logger
 
@@ -94,7 +99,7 @@ class OpenRouterClient:
         # 2. Select Schema based on prompt_key
         schema_map = {
             "master_analyst": MasterAnalystOutput,
-            "institutional_accumulator": MasterAnalystOutput,
+            "institutional_accumulator": InstitutionalAccumulatorOutput,
             "can_slim_growth": CanSlimOutput,
             "price_action_entry": PriceActionEntryOutput
         }

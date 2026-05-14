@@ -1,10 +1,9 @@
 {
   "pipeline": {
-    "universe_limit": 1000,
+    "universe_limit": 50000,
     "model": "google/gemini-3-flash-preview",
-    "prompt_mode": "master_analyst",
+    "prompt_mode": "can_slim_growth",
     "save_prompts": false,
-    "exchanges": "NASDAQ,NYSE",
     "news_summary_max_chars": 500,
     "max_recent_articles": 10
   },
@@ -24,9 +23,7 @@
   "technical_filters": [
     "price > sma_50",
     "price > sma_100",
-    "price > sma_200",
     "sma_50 > sma_100",
-    "sma_100 > sma_200",
     "price >= 1.20 * low_52w",
     "price >= 0.80 * high_52w"
   ]

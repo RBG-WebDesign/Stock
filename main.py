@@ -22,6 +22,7 @@ from tqa.llm.orchestrator import AnalysisOrchestrator
 from tqa.utils.session_logger import init_session
 from tqa.utils.report_builder import generate_pdf_report
 from tqa.utils.config_loader import load_config_file, FullConfig
+from tqa.utils.data_formatter import format_currency
 
 # Initialize Rich Console and Typer
 console = Console()
@@ -81,6 +82,7 @@ async def run_pipeline(
     news_summary_max_chars: int = settings.NEWS_SUMMARY_MAX_CHARS,
     max_recent_articles: int = settings.MAX_RECENT_ARTICLES,
     save_prompts: bool = False,
+    exchanges: Optional[str] = settings.DEFAULT_EXCHANGES,
     prompt_mode: str = "master_analyst",
     model: str = settings.DEFAULT_MODEL,
     technical_filters: Optional[List[str]] = None
@@ -103,6 +105,7 @@ async def run_pipeline(
         "news_summary_max_chars": news_summary_max_chars,
         "max_recent_articles": max_recent_articles,
         "save_prompts": save_prompts,
+        "exchanges": exchanges,
         "model": model,
         "prompt_mode": prompt_mode,
         "technical_filters": technical_filters,
@@ -117,7 +120,8 @@ async def run_pipeline(
             # Use provided market cap or fallback to defaults in client
             fetch_kwargs = {
                 "min_market_cap": min_market_cap if min_market_cap is not None else settings.DEFAULT_MIN_MARKET_CAP,
-                "max_market_cap": max_market_cap if max_market_cap is not None else settings.DEFAULT_MAX_MARKET_CAP
+                "max_market_cap": max_market_cap if max_market_cap is not None else settings.DEFAULT_MAX_MARKET_CAP,
+                "exchanges": exchanges
             }
                 
             universe = await client.fetch_universe(**fetch_kwargs)
@@ -158,7 +162,7 @@ async def run_pipeline(
 
                 quarters = get_recent_quarters(4)
                 for year, q in quarters:
-                    quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True)
+                    quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True, exchanges=exchanges)
                     if quarter_data:
                         for statement in quarter_data:
                             symbol = statement.get('symbol')
@@ -261,11 +265,11 @@ async def run_pipeline(
                 
                 # Fetch bulk data concurrently
                 profiles_res, ratings_res, scores_res, targets_res, consensus_res = await asyncio.gather(
-                    client.fetch_profile_bulk(use_csv=True),
-                    client.fetch_rating_bulk(use_csv=True),
-                    client.fetch_scores_bulk(use_csv=True),
-                    client.fetch_price_target_summary_bulk(use_csv=True),
-                    client.fetch_upgrades_downgrades_consensus_bulk(use_csv=True)
+                    client.fetch_profile_bulk(use_csv=True, exchanges=exchanges),
+                    client.fetch_rating_bulk(use_csv=True, exchanges=exchanges),
+                    client.fetch_scores_bulk(use_csv=True, exchanges=exchanges),
+                    client.fetch_price_target_summary_bulk(use_csv=True, exchanges=exchanges),
+                    client.fetch_upgrades_downgrades_consensus_bulk(use_csv=True, exchanges=exchanges)
                 )
                 
                 # Build lookup maps
@@ -426,21 +430,37 @@ async def run_pipeline(
         ticker = data['ticker']
         latest_price = "N/A"
         if data.get('historical'):
-            latest_price = f"${data['historical'][0].get('close', 0):.2f}"
+            currency = data.get('profile', {}).get('currency', 'USD')
+            latest_price = format_currency(data['historical'][0].get('close', 0), currency)
         
         analysis = data.get('analysis')
         conf = "N/A"
         pattern = "N/A"
         if analysis:
+            # Extract confidence score from any schema
             if hasattr(analysis, 'confidence_score'):
                 conf = str(analysis.confidence_score)
             elif isinstance(analysis, dict):
                 conf = str(analysis.get('confidence_score', 'N/A'))
             
-            if hasattr(analysis, 'primary_pattern'):
-                pattern = analysis.primary_pattern
-            elif isinstance(analysis, dict):
-                pattern = analysis.get('primary_pattern', 'N/A')
+            # Polymorphic pattern extraction
+            pattern_attr_priority = [
+                'primary_pattern',
+                'base_classification',
+                's_supply_demand',
+                'institutional_trend_analysis'
+            ]
+            for attr in pattern_attr_priority:
+                val = None
+                if hasattr(analysis, attr):
+                    val = getattr(analysis, attr)
+                elif isinstance(analysis, dict):
+                    val = analysis.get(attr)
+                
+                if val:
+                    # Truncate long descriptions for the table
+                    pattern = (val[:37] + "...") if len(val) > 40 else val
+                    break
 
         table.add_row(ticker, latest_price, conf, pattern)
         
@@ -482,6 +502,7 @@ def scan(
     news_summary_max_chars: Annotated[Optional[int], typer.Option("--news-summary-max-chars", help="Maximum characters for news article summaries.")] = None,
     max_recent_articles: Annotated[Optional[int], typer.Option("--max-recent-articles", help="Number of recent news articles to include in LLM payload.")] = None,
     save_prompts: Annotated[bool, typer.Option("--save-prompts", "-s", help="Save all LLM prompts and responses for debugging.")] = False,
+    exchanges: Annotated[Optional[str], typer.Option("--exchanges", "-X", help="Comma-separated list of stock exchanges to screen.")] = None,
     prompt_mode: Annotated[Optional[str], typer.Option("--prompt-mode", "-p", help="Prompt mode to use for analysis.")] = None,
     model: Annotated[Optional[str], typer.Option("--model", "-m", help="LLM model to use.")] = None,
     config_path: Annotated[Optional[Path], typer.Option("--config", "-c", help="Path to a JSON configuration file.")] = None
@@ -515,6 +536,7 @@ def scan(
         max_recent_articles is not None,
         prompt_mode is not None,
         model is not None,
+        exchanges is not None,
         save_prompts is True # Since default is False
     ])
     skip_prompts = config_path is not None or cli_args_provided
@@ -530,6 +552,10 @@ def scan(
     if model is None:
         model = config.pipeline.model or settings.DEFAULT_MODEL
     
+    if exchanges is None:
+        # If not provided via CLI, use config (which defaults to settings.DEFAULT_EXCHANGES)
+        exchanges = config.pipeline.exchanges
+
     if prompt_mode is None:
         prompt_mode = config.pipeline.prompt_mode or settings.DEFAULT_PROMPT_KEY
 
@@ -626,6 +652,7 @@ def scan(
             news_summary_max_chars=news_summary_max_chars,
             max_recent_articles=max_recent_articles,
             save_prompts=save_prompts,
+            exchanges=exchanges,
             prompt_mode=prompt_mode,
             model=model,
             technical_filters=technical_filters

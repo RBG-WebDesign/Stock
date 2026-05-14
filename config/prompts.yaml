@@ -62,7 +62,7 @@ user_prompts:
     4. Price/Volume Footprint: On the Daily chart, do you see more "Wide-Range Up Days" on high volume than "Down Days" on high volume? This indicates accumulation.
     5. Base Tightness: Is the stock forming a "cheat" or a "handle" with very low volatility?
     
-    Output your findings strictly in the MasterAnalystOutput JSON format.
+    Output your findings strictly in the InstitutionalAccumulatorOutput JSON format.
 
   # 3. The "CAN SLIM" Growth Prompt
   can_slim_growth: |

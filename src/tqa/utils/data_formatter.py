@@ -156,6 +156,27 @@ def format_fundamentals_for_llm(
     
     return formatted
 
+def format_currency(val: Any, currency: Optional[str] = "USD") -> str:
+    """Formats a number as currency using the correct symbol."""
+    if val is None or not isinstance(val, (int, float)):
+        return "N/A"
+    
+    symbols = {
+        "USD": "$",
+        "EUR": "€",
+        "GBP": "£",
+        "JPY": "¥",
+        "CNY": "¥",
+        "CAD": "C$",
+        "AUD": "A$",
+        "HKD": "HK$",
+        "INR": "₹",
+        "KRW": "₩"
+    }
+    
+    symbol = symbols.get(currency.upper() if currency else "USD", currency if currency else "$")
+    return f"{symbol}{val:,.2f}"
+
 def format_large_number(val: Any) -> Any:
     """Converts large numbers to human readable M/B suffixes."""
     if val is None or not isinstance(val, (int, float)):

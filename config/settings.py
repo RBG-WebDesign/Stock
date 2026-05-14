@@ -2,6 +2,7 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from typing import Optional
 
 # Define base paths dynamically so the script runs from anywhere
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -59,6 +60,10 @@ class Settings(BaseSettings):
     DEFAULT_MIN_REV_GROWTH: float = 20.0
     DEFAULT_MIN_MARKET_CAP: int = 100_000_000
     DEFAULT_MAX_MARKET_CAP: int = 1_000_000_000
+    DEFAULT_EXCHANGES: Optional[str] = Field(
+        default="NASDAQ,NYSE",
+        description="Comma-separated list of stock exchanges to screen (e.g., NASDAQ,NYSE,AMEX,EURONEXT,TSX). Set to null to search all."
+    )
 
     # --- LLM Payload Settings ---
     NEWS_SUMMARY_MAX_CHARS: int = Field(

@@ -20,6 +20,12 @@ class FMPClient(BaseDataFetcher):
         key = api_key or settings.FMP_API_KEY
         super().__init__(api_key=key, semaphore_limit=semaphore_limit)
 
+    def _get_exchange_suffix(self, exchanges: Optional[str]) -> str:
+        """Helper to generate a consistent cache suffix for exchanges."""
+        if not exchanges:
+            return "ALL"
+        return exchanges.replace(",", "_")
+
     def _proactive_cache_individual(self, endpoint: str, ticker: Any, data: Any):
         """
         Saves a piece of data into the local cache as if it were fetched individually.
@@ -47,7 +53,8 @@ class FMPClient(BaseDataFetcher):
     async def fetch_universe(
         self,
         min_market_cap: int = settings.DEFAULT_MIN_MARKET_CAP,
-        max_market_cap: int = settings.DEFAULT_MAX_MARKET_CAP
+        max_market_cap: int = settings.DEFAULT_MAX_MARKET_CAP,
+        exchanges: Optional[str] = settings.DEFAULT_EXCHANGES
     ) -> List[Dict[str, Any]]:
         """
         Fetches the initial universe of stocks based on market cap and volume.
@@ -55,6 +62,7 @@ class FMPClient(BaseDataFetcher):
         Args:
             min_market_cap: Minimum market capitalization in absolute dollars.
             max_market_cap: Maximum market capitalization in absolute dollars.
+            exchanges: Comma-separated list of exchanges to screen.
         """
         endpoint = "company-screener"
         url = f"{self.BASE_URL}/{endpoint}"
@@ -62,15 +70,18 @@ class FMPClient(BaseDataFetcher):
             "marketCapMoreThan": min_market_cap,
             "marketCapLowerThan": max_market_cap,
             "volumeMoreThan": 100000,
-            "exchange": "NASDAQ,NYSE",
             "isActivelyTrading": "true",
             "limit": 10000  # Fetch a large pool to apply our own filters later
         }
         
+        if exchanges:
+            params["exchange"] = exchanges
+        
         logger.info(f"Fetching target universe from FMP (${min_market_cap:,} to ${max_market_cap:,})...")
         
-        # Unique cache key based on market cap range
-        cache_ticker = f"UNIVERSE_{min_market_cap}_{max_market_cap}"
+        # Unique cache key based on market cap range and exchanges
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        cache_ticker = f"UNIVERSE_{min_market_cap}_{max_market_cap}_{ex_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -101,9 +112,10 @@ class FMPClient(BaseDataFetcher):
         """Fetches key metrics like ROE, ROIC, and Net Debt."""
         endpoint = "key-metrics"
         url = f"{self.BASE_URL}/{endpoint}"
+        period = "quarter" if settings.FMP_PLAN == "premium" else "annual"
         params = {
             "symbol": ticker.upper(),
-            "period": "annual",  # Quarter is premium for some users
+            "period": period,
             "limit": limit
         }
         data = await self.fetch_with_cache(
@@ -118,9 +130,10 @@ class FMPClient(BaseDataFetcher):
         """Fetches financial ratios like margins (gross, operating, net)."""
         endpoint = "ratios"
         url = f"{self.BASE_URL}/{endpoint}"
+        period = "quarter" if settings.FMP_PLAN == "premium" else "annual"
         params = {
             "symbol": ticker.upper(),
-            "period": "annual",  # Quarter is premium for some users
+            "period": period,
             "limit": limit
         }
         data = await self.fetch_with_cache(
@@ -194,10 +207,10 @@ class FMPClient(BaseDataFetcher):
         """Fetches analyst estimates for future EPS and revenue."""
         endpoint = "analyst-estimates"
         url = f"{self.BASE_URL}/{endpoint}"
-        # Period 'annual' is less likely to be premium-only than 'quarter'
+        period = "quarter" if settings.FMP_PLAN == "premium" else "annual"
         params = {
             "symbol": ticker.upper(),
-            "period": "annual",
+            "period": period,
             "limit": 8
         }
         data = await self.fetch_with_cache(
@@ -393,7 +406,8 @@ class FMPClient(BaseDataFetcher):
         self,
         year: int,
         period: str,
-        use_csv: bool = False
+        use_csv: bool = False,
+        exchanges: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Fetches income statements for all companies for a given year and period.
@@ -406,10 +420,13 @@ class FMPClient(BaseDataFetcher):
         }
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
         # We use a special ticker "BULK" for caching bulk results
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}_{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -426,7 +443,7 @@ class FMPClient(BaseDataFetcher):
 
         return data if data else []
 
-    async def fetch_earnings_surprises_bulk(self, year: int, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_earnings_surprises_bulk(self, year: int, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetches annual earnings surprises for all companies for a given year.
         """
@@ -437,9 +454,12 @@ class FMPClient(BaseDataFetcher):
         }
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"BULK_{year}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -454,16 +474,19 @@ class FMPClient(BaseDataFetcher):
                     self._proactive_cache_individual("earnings", symbol, entry)
         return data if data else []
 
-    async def fetch_balance_sheet_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_balance_sheet_bulk(self, year: int, period: str, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches balance sheet statements for all companies."""
         endpoint = "balance-sheet-statement-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {"year": str(year), "period": period.upper()}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}_{ex_suffix}{csv_suffix}"
         
         return await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -472,16 +495,19 @@ class FMPClient(BaseDataFetcher):
             params=params
         )
 
-    async def fetch_cash_flow_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_cash_flow_bulk(self, year: int, period: str, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches cash flow statements for all companies."""
         endpoint = "cash-flow-statement-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {"year": str(year), "period": period.upper()}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}_{ex_suffix}{csv_suffix}"
         
         return await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -490,16 +516,19 @@ class FMPClient(BaseDataFetcher):
             params=params
         )
 
-    async def fetch_income_statement_growth_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_income_statement_growth_bulk(self, year: int, period: str, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches income statement growth for all companies."""
         endpoint = "income-statement-growth-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {"year": str(year), "period": period.upper()}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}_{ex_suffix}{csv_suffix}"
         
         return await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -508,16 +537,19 @@ class FMPClient(BaseDataFetcher):
             params=params
         )
 
-    async def fetch_profile_bulk(self, part: int = 0, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_profile_bulk(self, part: int = 0, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches comprehensive company profiles in bulk."""
         endpoint = "profile-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {"part": str(part)}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"PART_{part}{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"PART_{part}_{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -532,16 +564,19 @@ class FMPClient(BaseDataFetcher):
                     self._proactive_cache_individual("profile", symbol, entry)
         return data if data else []
 
-    async def fetch_rating_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_rating_bulk(self, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches stock ratings in bulk."""
         endpoint = "rating-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"ALL{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -556,16 +591,19 @@ class FMPClient(BaseDataFetcher):
                     self._proactive_cache_individual("rating", symbol, entry)
         return data if data else []
 
-    async def fetch_scores_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_scores_bulk(self, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches financial scores (Altman Z, Piotroski) in bulk."""
         endpoint = "scores-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"ALL{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -580,16 +618,19 @@ class FMPClient(BaseDataFetcher):
                     self._proactive_cache_individual("financial-scores", symbol, entry)
         return data if data else []
 
-    async def fetch_price_target_summary_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_price_target_summary_bulk(self, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches price target summaries in bulk."""
         endpoint = "price-target-summary-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"ALL{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
@@ -604,16 +645,19 @@ class FMPClient(BaseDataFetcher):
                     self._proactive_cache_individual("price-target-summary", symbol, entry)
         return data if data else []
 
-    async def fetch_upgrades_downgrades_consensus_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+    async def fetch_upgrades_downgrades_consensus_bulk(self, use_csv: bool = False, exchanges: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches upgrades/downgrades consensus in bulk."""
         endpoint = "upgrades-downgrades-consensus-bulk"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {}
         if use_csv:
             params["datatype"] = "csv"
+        if exchanges:
+            params["exchange"] = exchanges
         
-        suffix = "_CSV" if use_csv else ""
-        ticker_key = f"ALL{suffix}"
+        ex_suffix = self._get_exchange_suffix(exchanges)
+        csv_suffix = "_CSV" if use_csv else ""
+        ticker_key = f"{ex_suffix}{csv_suffix}"
         
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
