@@ -69,8 +69,15 @@ def print_banner():
 async def run_pipeline(
     universe_limit: int,
     min_eps_growth: float,
+    min_rev_growth: float = 20.0,
+    max_rev_growth: Optional[float] = None,
     min_prev_eps: Optional[float] = None,
+    max_prev_eps: Optional[float] = None,
     min_latest_eps: Optional[float] = None,
+    min_market_cap: Optional[int] = None,
+    max_market_cap: Optional[int] = None,
+    news_summary_max_chars: int = settings.NEWS_SUMMARY_MAX_CHARS,
+    max_recent_articles: int = settings.MAX_RECENT_ARTICLES,
     save_prompts: bool = False,
     prompt_mode: str = "master_analyst",
     model: str = settings.DEFAULT_MODEL
@@ -83,8 +90,15 @@ async def run_pipeline(
     await session.log_config({
         "universe_limit": universe_limit,
         "min_eps_growth": min_eps_growth,
+        "min_rev_growth": min_rev_growth,
+        "max_rev_growth": max_rev_growth,
         "min_prev_eps": min_prev_eps,
+        "max_prev_eps": max_prev_eps,
         "min_latest_eps": min_latest_eps,
+        "min_market_cap": min_market_cap,
+        "max_market_cap": max_market_cap,
+        "news_summary_max_chars": news_summary_max_chars,
+        "max_recent_articles": max_recent_articles,
         "save_prompts": save_prompts,
         "model": model,
         "prompt_mode": prompt_mode,
@@ -96,7 +110,13 @@ async def run_pipeline(
     async with FMPClient() as client:
         # 1. Fetch Universe
         with console.status("[bold green]Fetching Universe data from FMP...") as status:
-            universe = await client.fetch_universe()
+            # Use provided market cap or fallback to defaults in client
+            fetch_kwargs = {
+                "min_market_cap": min_market_cap if min_market_cap is not None else settings.DEFAULT_MIN_MARKET_CAP,
+                "max_market_cap": max_market_cap if max_market_cap is not None else settings.DEFAULT_MAX_MARKET_CAP
+            }
+                
+            universe = await client.fetch_universe(**fetch_kwargs)
             if not universe:
                 console.print("[bold red]Error:[/bold red] Could not fetch universe from FMP.")
                 return None
@@ -152,7 +172,10 @@ async def run_pipeline(
             p1_task = progress.add_task("[yellow]Phase 1: Fundamental Screening...", total=len(universe))
             screener = Screener(
                 min_eps_growth=min_eps_growth,
+                min_rev_growth=min_rev_growth,
+                max_rev_growth=max_rev_growth,
                 min_prev_eps=min_prev_eps,
+                max_prev_eps=max_prev_eps,
                 min_latest_eps=min_latest_eps
             )
             passed_fund = []
@@ -233,7 +256,7 @@ async def run_pipeline(
                     client.fetch_historical_ratings(ticker),
                     client.fetch_financial_scores(ticker),
                     client.fetch_price_target_summary(ticker),
-                    client.fetch_stock_news(ticker, limit=settings.MAX_RECENT_ARTICLES)
+                    client.fetch_stock_news(ticker, limit=max_recent_articles)
                 )
                 d.update({
                     "key_metrics": res[0], "ratios": res[1], "share_float": res[2],
@@ -282,7 +305,8 @@ async def run_pipeline(
                 session=session, 
                 save_prompts=save_prompts,
                 model=model,
-                prompt_mode=prompt_mode
+                prompt_mode=prompt_mode,
+                summary_max_chars=news_summary_max_chars
             )
             progress.remove_task(p4_task)
             session.update_funnel_stats(final_watchlist_count=len(passed_tickers))
@@ -291,8 +315,15 @@ async def run_pipeline(
     await session.log_config({
         "universe_limit": universe_limit,
         "min_eps_growth": min_eps_growth,
+        "min_rev_growth": min_rev_growth,
+        "max_rev_growth": max_rev_growth,
         "min_prev_eps": min_prev_eps,
+        "max_prev_eps": max_prev_eps,
         "min_latest_eps": min_latest_eps,
+        "min_market_cap": min_market_cap,
+        "max_market_cap": max_market_cap,
+        "news_summary_max_chars": news_summary_max_chars,
+        "max_recent_articles": max_recent_articles,
         "save_prompts": save_prompts,
         "model": model,
         "prompt_mode": prompt_mode,
@@ -356,8 +387,15 @@ def main(ctx: typer.Context):
 def scan(
     universe_limit: Annotated[Optional[int], typer.Option("--limit", "-l", help="Max tickers to fetch from FMP.")] = None,
     min_eps_growth: Annotated[Optional[float], typer.Option("--min-eps-growth-pct", "-e", help="Minimum YoY EPS growth %.")] = None,
-    min_prev_eps: Annotated[Optional[float], typer.Option("--min-prev-eps", help="Minimum absolute EPS for the previous quarter to avoid low-base distortions.")] = None,
+    min_rev_growth: Annotated[Optional[float], typer.Option("--min-rev-growth-pct", help="Minimum YoY Revenue growth %.")] = None,
+    max_rev_growth: Annotated[Optional[float], typer.Option("--max-rev-growth-pct", help="Maximum YoY Revenue growth %.")] = None,
+    min_prev_eps: Annotated[Optional[float], typer.Option("--min-prev-eps", help="Minimum absolute EPS for the previous quarter.")] = None,
+    max_prev_eps: Annotated[Optional[float], typer.Option("--max-prev-eps", help="Maximum absolute EPS for the previous quarter.")] = None,
     min_latest_eps: Annotated[Optional[float], typer.Option("--min-latest-eps", help="Minimum absolute EPS for the most recent quarter.")] = None,
+    min_market_cap_m: Annotated[Optional[float], typer.Option("--min-market-cap", help="Minimum market capitalization in Millions (e.g., 100 for $100M).")] = None,
+    max_market_cap_m: Annotated[Optional[float], typer.Option("--max-market-cap", help="Maximum market capitalization in Millions (e.g., 1000 for $1B).")] = None,
+    news_summary_max_chars: Annotated[Optional[int], typer.Option("--news-summary-max-chars", help="Maximum characters for news article summaries.")] = None,
+    max_recent_articles: Annotated[Optional[int], typer.Option("--max-recent-articles", help="Number of recent news articles to include in LLM payload.")] = None,
     save_prompts: Annotated[bool, typer.Option("--save-prompts", "-s", help="Save all LLM prompts and responses for debugging.")] = False,
     prompt_mode: Annotated[str, typer.Option("--prompt-mode", "-p", help="Prompt mode to use for analysis.")] = settings.DEFAULT_PROMPT_KEY,
     model: Annotated[str, typer.Option("--model", "-m", help="LLM model to use.")] = settings.DEFAULT_MODEL
@@ -368,7 +406,11 @@ def scan(
         universe_limit = IntPrompt.ask("[bold cyan]How many tickers should we pull from the FMP universe?[/bold cyan]", default=50)
     
     if min_eps_growth is None:
-        min_eps_growth = FloatPrompt.ask("[bold cyan]Enter minimum EPS growth threshold (%) [/bold cyan]", default=20.0)
+        min_eps_growth = FloatPrompt.ask("[bold cyan]Enter minimum EPS growth threshold (%) [/bold cyan]", default=settings.DEFAULT_MIN_EPS_GROWTH)
+
+    # Defaults for internal values
+    if min_rev_growth is None:
+        min_rev_growth = settings.DEFAULT_MIN_REV_GROWTH
 
     # Advanced Mode toggle
     advanced = questionary.confirm("Enter advanced settings mode?", default=False).ask()
@@ -387,15 +429,54 @@ def scan(
         
         save_prompts = questionary.confirm("Save raw prompts for debug?", default=save_prompts).ask()
 
+        # News & Summary Settings
+        console.print("\n[bold yellow]LLM Context Settings[/bold yellow]")
+        news_summary_max_chars = IntPrompt.ask("News summary max characters", default=news_summary_max_chars or settings.NEWS_SUMMARY_MAX_CHARS)
+        max_recent_articles = IntPrompt.ask("Max news articles to fetch", default=max_recent_articles or settings.MAX_RECENT_ARTICLES)
+
+        # New Fundamental & Market Cap Filters
+        console.print("\n[bold yellow]Advanced Fundamental Filters[/bold yellow]")
+        
+        if min_rev_growth is None or advanced:
+            res = FloatPrompt.ask("Minimum YoY Revenue growth %", default=min_rev_growth or settings.DEFAULT_MIN_REV_GROWTH)
+            min_rev_growth = float(res)
+
+        max_rev_growth_val = FloatPrompt.ask("Maximum YoY Revenue growth % (0 for None)", default=max_rev_growth or 0.0)
+        max_rev_growth = float(max_rev_growth_val) if max_rev_growth_val != 0 else None
+
+        max_prev_eps_val = FloatPrompt.ask("Maximum Prev Quarter EPS (e.g. 0 for turn profitable, 999 for None)", default=max_prev_eps or 999.0)
+        max_prev_eps = float(max_prev_eps_val) if max_prev_eps_val != 999.0 else None
+
+        console.print("\n[bold yellow]Universe Scale Filters[/bold yellow]")
+        min_market_cap_m = FloatPrompt.ask("Minimum Market Cap ($ Millions)", default=min_market_cap_m or (settings.DEFAULT_MIN_MARKET_CAP / 1_000_000))
+        max_market_cap_m = FloatPrompt.ask("Maximum Market Cap ($ Millions)", default=max_market_cap_m or (settings.DEFAULT_MAX_MARKET_CAP / 1_000_000))
+
     console.print(f"\n[bold green]▶ Launching Pipeline...[/bold green]")
     console.print(f"Settings: [yellow]Model={model}[/yellow] | [yellow]Prompt Mode={prompt_mode}[/yellow] | [yellow]Date={datetime.now().strftime('%Y-%m-%d')}[/yellow]\n")
 
     try:
+        # Convert market cap from Millions to absolute dollars
+        min_market_cap = int(min_market_cap_m * 1_000_000) if min_market_cap_m is not None else None
+        max_market_cap = int(max_market_cap_m * 1_000_000) if max_market_cap_m is not None else None
+        
+        # News defaults if not provided by flags or advanced mode
+        if news_summary_max_chars is None:
+            news_summary_max_chars = settings.NEWS_SUMMARY_MAX_CHARS
+        if max_recent_articles is None:
+            max_recent_articles = settings.MAX_RECENT_ARTICLES
+
         session_id = asyncio.run(run_pipeline(
             universe_limit,
             min_eps_growth,
+            min_rev_growth=min_rev_growth,
+            max_rev_growth=max_rev_growth,
             min_prev_eps=min_prev_eps,
+            max_prev_eps=max_prev_eps,
             min_latest_eps=min_latest_eps,
+            min_market_cap=min_market_cap,
+            max_market_cap=max_market_cap,
+            news_summary_max_chars=news_summary_max_chars,
+            max_recent_articles=max_recent_articles,
             save_prompts=save_prompts,
             prompt_mode=prompt_mode,
             model=model

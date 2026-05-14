@@ -2,6 +2,7 @@
 from typing import Any, Dict, List, Optional
 import pandas as pd
 from tqa.utils.logger import logger
+from config.settings import settings
 
 class Screener:
     """
@@ -11,16 +12,20 @@ class Screener:
     Uses a multi-stage "Waterfall" approach to discard weak candidates early.
     """
     def __init__(
-        self, 
-        min_eps_growth: float = 20.0,
-        min_rev_growth: float = 20.0,
+        self,
+        min_eps_growth: float = settings.DEFAULT_MIN_EPS_GROWTH,
+        min_rev_growth: float = settings.DEFAULT_MIN_REV_GROWTH,
+        max_rev_growth: Optional[float] = None,
         min_prev_eps: Optional[float] = None,
+        max_prev_eps: Optional[float] = None,
         min_latest_eps: Optional[float] = None,
         require_acceleration: bool = False
     ):
         self.min_eps_growth = min_eps_growth
         self.min_rev_growth = min_rev_growth
+        self.max_rev_growth = max_rev_growth
         self.min_prev_eps = min_prev_eps
+        self.max_prev_eps = max_prev_eps
         self.min_latest_eps = min_latest_eps
         self.require_acceleration = require_acceleration
 
@@ -46,6 +51,8 @@ class Screener:
         # Optional absolute EPS filters
         if self.min_prev_eps is not None and eps_prev < self.min_prev_eps:
             return False
+        if self.max_prev_eps is not None and eps_prev > self.max_prev_eps:
+            return False
         if self.min_latest_eps is not None and eps_latest < self.min_latest_eps:
             return False
 
@@ -58,6 +65,10 @@ class Screener:
         rev_growth = 0.0
         if rev_latest and rev_prev and rev_prev != 0:
             rev_growth = ((rev_latest - rev_prev) / rev_prev) * 100
+
+        # Optional revenue growth limit
+        if self.max_rev_growth is not None and rev_growth > self.max_rev_growth:
+            return False
 
         # Acceleration Check (Optional)
         if self.require_acceleration and len(income_statements) >= 3:

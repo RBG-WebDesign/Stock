@@ -19,26 +19,37 @@ class FMPClient(BaseDataFetcher):
         key = api_key or settings.FMP_API_KEY
         super().__init__(api_key=key, semaphore_limit=semaphore_limit)
 
-    async def fetch_universe(self) -> List[Dict[str, Any]]:
+    async def fetch_universe(
+        self,
+        min_market_cap: int = settings.DEFAULT_MIN_MARKET_CAP,
+        max_market_cap: int = settings.DEFAULT_MAX_MARKET_CAP
+    ) -> List[Dict[str, Any]]:
         """
         Fetches the initial universe of stocks based on market cap and volume.
+        
+        Args:
+            min_market_cap: Minimum market capitalization in absolute dollars.
+            max_market_cap: Maximum market capitalization in absolute dollars.
         """
         endpoint = "company-screener"
         url = f"{self.BASE_URL}/{endpoint}"
         params = {
-            "marketCapMoreThan": 100000000,     # $100M
-            "marketCapLowerThan": 1000000000,   # $1B
+            "marketCapMoreThan": min_market_cap,
+            "marketCapLowerThan": max_market_cap,
             "volumeMoreThan": 100000,
             "exchange": "NASDAQ,NYSE",
             "isActivelyTrading": "true",
             "limit": 10000  # Fetch a large pool to apply our own filters later
         }
         
-        logger.info("Fetching target universe from FMP...")
-        # Use "UNIVERSE" as a pseudo-ticker for caching the screener results
+        logger.info(f"Fetching target universe from FMP (${min_market_cap:,} to ${max_market_cap:,})...")
+        
+        # Unique cache key based on market cap range
+        cache_ticker = f"UNIVERSE_{min_market_cap}_{max_market_cap}"
+        
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
-            ticker="UNIVERSE",
+            ticker=cache_ticker,
             url=url,
             params=params
         )

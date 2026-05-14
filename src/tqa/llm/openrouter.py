@@ -81,7 +81,7 @@ class OpenRouterClient:
         Sends fundamental data and charts to OpenRouter for comprehensive analysis.
         Returns a tuple of (analysis_result, prompt_string).
         """
-        logger.info(f"Initiating OpenRouter analysis for {ticker} using {self.model} via {prompt_key}...")
+        logger.debug(f"Initiating OpenRouter analysis for {ticker} using {self.model} via {prompt_key}...")
 
         # 1. Prepare Prompts
         system_prompt = self.prompts_config.get("system_prompts", {}).get("swing_trader", "")
@@ -152,7 +152,7 @@ class OpenRouterClient:
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
-                    logger.info(f"Retrying analysis for {ticker} (Attempt {attempt}/{max_retries})...")
+                    logger.debug(f"Retrying analysis for {ticker} (Attempt {attempt}/{max_retries})...")
                     # Exponential backoff with jitter
                     await asyncio.sleep(2 ** attempt + random.uniform(0, 1))
 

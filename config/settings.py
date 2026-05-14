@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     
     # --- Pipeline Settings ---
     DEFAULT_MODEL: str = Field(
-        default="moonshotai/kimi-k2.5", 
+        default="google/gemini-3-flash-preview", 
         description="The default model string to use for analysis"
     )
 
@@ -53,6 +53,12 @@ class Settings(BaseSettings):
         default=365,
         description="Number of days to keep raw data in cache"
     )
+
+    # --- Default Screener Filters ---
+    DEFAULT_MIN_EPS_GROWTH: float = 20.0
+    DEFAULT_MIN_REV_GROWTH: float = 20.0
+    DEFAULT_MIN_MARKET_CAP: int = 100_000_000
+    DEFAULT_MAX_MARKET_CAP: int = 1_000_000_000
 
     # --- LLM Payload Settings ---
     NEWS_SUMMARY_MAX_CHARS: int = Field(

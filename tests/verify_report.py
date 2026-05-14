@@ -1,8 +1,8 @@
-# verify_report.py
+# tests/verify_report.py
 import os
 import json
 from pathlib import Path
-from src.tqa.utils.report_builder import generate_pdf_report
+from tqa.utils.report_builder import generate_pdf_report
 from config.settings import settings
 
 def create_mock_data():
