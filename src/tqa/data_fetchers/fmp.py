@@ -1,5 +1,6 @@
 # src/tqa/data_fetchers/fmp.py
 import asyncio
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,30 @@ class FMPClient(BaseDataFetcher):
         # Use provided key or fallback to settings
         key = api_key or settings.FMP_API_KEY
         super().__init__(api_key=key, semaphore_limit=semaphore_limit)
+
+    def _proactive_cache_individual(self, endpoint: str, ticker: Any, data: Any):
+        """
+        Saves a piece of data into the local cache as if it were fetched individually.
+        Ensures format compatibility (e.g. wrapping statements in a list).
+        """
+        if not ticker or not isinstance(ticker, str):
+            logger.debug(f"Skipping proactive cache for {endpoint}: Invalid ticker {ticker}")
+            return
+            
+        cache_path = self._get_cache_path(endpoint, ticker)
+        if cache_path.exists():
+            return
+
+        # Wrap in list if it's an endpoint that usually returns a list (e.g. statements)
+        list_endpoints = ["income-statement", "key-metrics", "ratios", "earnings"]
+        if endpoint in list_endpoints and not isinstance(data, list):
+            data = [data]
+
+        try:
+            with open(cache_path, "w") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            logger.error(f"Failed to proactively cache {ticker} for {endpoint}: {e}")
 
     async def fetch_universe(
         self,
@@ -364,7 +389,12 @@ class FMPClient(BaseDataFetcher):
             return data["historical"]
         return data if isinstance(data, list) else []
 
-    async def fetch_income_statement_bulk(self, year: int, period: str) -> List[Dict[str, Any]]:
+    async def fetch_income_statement_bulk(
+        self,
+        year: int,
+        period: str,
+        use_csv: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Fetches income statements for all companies for a given year and period.
         """
@@ -374,9 +404,13 @@ class FMPClient(BaseDataFetcher):
             "year": str(year),
             "period": period.upper()
         }
+        if use_csv:
+            params["datatype"] = "csv"
         
         # We use a special ticker "BULK" for caching bulk results
-        ticker_key = f"BULK_{year}_{period.upper()}"
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
             ticker=ticker_key,
@@ -385,30 +419,14 @@ class FMPClient(BaseDataFetcher):
         )
         
         if data and isinstance(data, list):
-            # Proactively cache individual ticker data to avoid redundant fetches later
-            # Note: This is an optimization to fill the local cache from bulk results.
             for statement in data:
                 symbol = statement.get("symbol")
-                if not symbol: continue
-                
-                # Check if we already have an individual cache for this ticker for today
-                # The bulk fetch already used fetch_with_cache which saved the BULK file.
-                # Now we manually save individual files if they don't exist.
-                indiv_cache_path = self._get_cache_path("income-statement", symbol)
-                if not indiv_cache_path.exists():
-                    try:
-                        # For income-statement endpoint, the data is usually a list of statements.
-                        # Since this bulk call is for a specific year/period, we only have one statement here.
-                        # However, fetch_income_statement normally returns a list (limit 8).
-                        # We'll just cache this single statement in a list format for compatibility.
-                        with open(indiv_cache_path, "w") as f:
-                            json.dump([statement], f, indent=4)
-                    except Exception as e:
-                        logger.error(f"Failed to proactively cache {symbol}: {e}")
-                        
+                if symbol:
+                    self._proactive_cache_individual("income-statement", symbol, statement)
+
         return data if data else []
 
-    async def fetch_earnings_surprises_bulk(self, year: int) -> List[Dict[str, Any]]:
+    async def fetch_earnings_surprises_bulk(self, year: int, use_csv: bool = False) -> List[Dict[str, Any]]:
         """
         Fetches annual earnings surprises for all companies for a given year.
         """
@@ -417,15 +435,228 @@ class FMPClient(BaseDataFetcher):
         params = {
             "year": str(year)
         }
+        if use_csv:
+            params["datatype"] = "csv"
         
-        ticker_key = f"BULK_{year}"
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}{suffix}"
+        
         data = await self.fetch_with_cache(
             endpoint_name=endpoint,
             ticker=ticker_key,
             url=url,
             params=params
         )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("earnings", symbol, entry)
         return data if data else []
+
+    async def fetch_balance_sheet_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches balance sheet statements for all companies."""
+        endpoint = "balance-sheet-statement-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {"year": str(year), "period": period.upper()}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        
+        return await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+
+    async def fetch_cash_flow_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches cash flow statements for all companies."""
+        endpoint = "cash-flow-statement-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {"year": str(year), "period": period.upper()}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        
+        return await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+
+    async def fetch_income_statement_growth_bulk(self, year: int, period: str, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches income statement growth for all companies."""
+        endpoint = "income-statement-growth-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {"year": str(year), "period": period.upper()}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"BULK_{year}_{period.upper()}{suffix}"
+        
+        return await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+
+    async def fetch_profile_bulk(self, part: int = 0, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches comprehensive company profiles in bulk."""
+        endpoint = "profile-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {"part": str(part)}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"PART_{part}{suffix}"
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("profile", symbol, entry)
+        return data if data else []
+
+    async def fetch_rating_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches stock ratings in bulk."""
+        endpoint = "rating-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"ALL{suffix}"
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("rating", symbol, entry)
+        return data if data else []
+
+    async def fetch_scores_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches financial scores (Altman Z, Piotroski) in bulk."""
+        endpoint = "scores-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"ALL{suffix}"
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("financial-scores", symbol, entry)
+        return data if data else []
+
+    async def fetch_price_target_summary_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches price target summaries in bulk."""
+        endpoint = "price-target-summary-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"ALL{suffix}"
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("price-target-summary", symbol, entry)
+        return data if data else []
+
+    async def fetch_upgrades_downgrades_consensus_bulk(self, use_csv: bool = False) -> List[Dict[str, Any]]:
+        """Fetches upgrades/downgrades consensus in bulk."""
+        endpoint = "upgrades-downgrades-consensus-bulk"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {}
+        if use_csv:
+            params["datatype"] = "csv"
+        
+        suffix = "_CSV" if use_csv else ""
+        ticker_key = f"ALL{suffix}"
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker_key,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            for entry in data:
+                symbol = entry.get("symbol")
+                if symbol:
+                    self._proactive_cache_individual("upgrades-downgrades-consensus", symbol, entry)
+        return data if data else []
+
+    async def fetch_market_cap_batch(self, symbols: List[str]) -> List[Dict[str, Any]]:
+        """Fetches market capitalization for multiple companies (batch)."""
+        if not symbols:
+            return []
+            
+        chunk_size = 50
+        chunks = [symbols[i:i + chunk_size] for i in range(0, len(symbols), chunk_size)]
+        
+        async def fetch_chunk(chunk):
+            syms = ",".join([s.upper() for s in chunk])
+            endpoint = "market-capitalization-batch"
+            url = f"{self.BASE_URL}/{endpoint}"
+            params = {"symbols": syms, "apikey": self.api_key}
+            
+            session = await self._get_session()
+            async with self._semaphore:
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    return []
+
+        tasks = [fetch_chunk(chunk) for chunk in chunks]
+        results = await asyncio.gather(*tasks)
+        
+        all_data = []
+        for r in results:
+            if isinstance(r, list):
+                all_data.extend(r)
+        return all_data
 
     async def fetch_ticker_data(self, ticker: str) -> Dict[str, Any]:
         """

@@ -15,14 +15,14 @@
 
 ## Phase 2: EOD Automation & Refinement (In Progress)
 * [x] Refactor Screener to include 7-point Trend Template and Waterfall filtering.
-* [-] Implement `src/tqa/utils/session_logger.py` for structured session tracking and prompt auditing (Funnel metrics in progress).
+* [x] Implement `src/tqa/utils/session_logger.py` for structured session tracking and prompt auditing.
 * [x] Implement robust error handling for market data API rate limits (using `asyncio.Semaphore` and exponential backoff).
 * [x] Implement automated cache cleanup to prune stale data.
+* [x] Implement bulk data optimization for Premium FMP users (reduces deep-metric fetch time by ~90%).
 * [x] Implement modular dynamic screening filters via JSON configuration.
 * [ ] Enhance reporting with comprehensive run configurations and company profile data (Industry, CEO, Operations).
 * [-] Implement native `.jsonl` batch payloads for OpenAI/Anthropic (currently uses parallel sync calls via OpenRouter).
 * [ ] Implement the batch submission, polling, and retrieval logic within `src/tqa/llm/`.
-* [ ] Implement `generate_report.py` (or `main.py report`) to aggregate results into a sorted Markdown summary.
 * [ ] Set up daily execution triggers (e.g., cron job or GitHub Actions) to run automatically at 5:00 PM EST.
 
 ## Phase 3: Advanced Signals & Execution (Future)

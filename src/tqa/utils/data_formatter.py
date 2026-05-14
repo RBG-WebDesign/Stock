@@ -3,22 +3,28 @@ import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import pandas as pd
-from config.settings import settings
 
 def format_fundamentals_for_llm(
     ticker_data: Dict[str, Any],
     news_summary_max_chars: Optional[int] = None,
-    max_recent_articles: Optional[int] = None
+    max_recent_articles: Optional[int] = None,
+    settings_override: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
-    Takes raw ticker data and returns a structured dictionary with pre-calculated 
+    Takes raw ticker data and returns a structured dictionary with pre-calculated
     growth metrics to assist the LLM in its analysis.
     """
-    # Use provided overrides or fallback to settings
-    news_max_chars = news_summary_max_chars or settings.NEWS_SUMMARY_MAX_CHARS
-    articles_limit = max_recent_articles or settings.MAX_RECENT_ARTICLES
+    # Use provided overrides, then settings_override, then fallback to defaults
+    news_max_chars = news_summary_max_chars
+    if news_max_chars is None and settings_override:
+        news_max_chars = getattr(settings_override, 'NEWS_SUMMARY_MAX_CHARS', 2000)
+    
+    articles_limit = max_recent_articles
+    if articles_limit is None and settings_override:
+        articles_limit = getattr(settings_override, 'MAX_RECENT_ARTICLES', 10)
 
     ticker = ticker_data.get("ticker", "UNKNOWN")
+    profile = ticker_data.get("profile", {})
     income_statements = ticker_data.get("income_statement", [])
     key_metrics = ticker_data.get("key_metrics", [])
     ratios = ticker_data.get("ratios", [])
@@ -66,6 +72,14 @@ def format_fundamentals_for_llm(
 
     formatted = {
         "ticker": ticker,
+        "profile": {
+            "name": profile.get("companyName"),
+            "industry": profile.get("industry"),
+            "sector": profile.get("sector"),
+            "description": profile.get("description"),
+            "analyst_consensus": profile.get("analyst_consensus"),
+            "bulk_rating": profile.get("bulk_rating"),
+        },
         "price_performance": {
             "1D_pct": price_change.get("1D"),
             "5D_pct": price_change.get("5D"),

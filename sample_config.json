@@ -1,6 +1,6 @@
 {
   "pipeline": {
-    "universe_limit": 250,
+    "universe_limit": 5000,
     "model": "google/gemini-3-flash-preview",
     "prompt_mode": "master_analyst",
     "save_prompts": false,

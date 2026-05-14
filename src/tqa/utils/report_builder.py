@@ -332,13 +332,13 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
             pdf.write_labeled_value("Sector", profile.get('sector', 'N/A'))
             pdf.write_labeled_value("Industry", profile.get('industry', 'N/A'))
             pdf.write_labeled_value("Country", profile.get('country', 'N/A'))
-            pdf.write_labeled_value("Exchange", profile.get('exchange') or profile.get('exchangeShortName', 'N/A'))
+            pdf.write_labeled_value("Exchange", profile.get('exchange') or profile.get('exchangeShortName', 'N/A'), is_last=True)
             pdf.ln(5)
 
             # --- Company Metadata Row 2 ---
             mkt_cap = profile.get('marketCap') or profile.get('mktCap')
             mkt_cap_str = f"${format_large_number(mkt_cap)}" if mkt_cap else "N/A"
-            pdf.write_labeled_value("Market Cap", mkt_cap_str, is_last=True)
+            pdf.write_labeled_value("Market Cap", mkt_cap_str)
 
             rev = profile.get('recent_revenue')
             rev_str = f"${format_large_number(rev)}" if rev else "N/A"

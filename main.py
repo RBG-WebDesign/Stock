@@ -158,11 +158,12 @@ async def run_pipeline(
 
                 quarters = get_recent_quarters(4)
                 for year, q in quarters:
-                    quarter_data = await client.fetch_income_statement_bulk(year, q)
+                    quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True)
                     if quarter_data:
                         for statement in quarter_data:
-                            symbol = statement.get('symbol', '').upper()
-                            if symbol:
+                            symbol = statement.get('symbol')
+                            if symbol and isinstance(symbol, str):
+                                symbol = symbol.upper()
                                 if symbol not in ticker_statements:
                                     ticker_statements[symbol] = []
                                 ticker_statements[symbol].append(statement)
@@ -248,36 +249,103 @@ async def run_pipeline(
             # 4. Phase 3: Deep Metrics Fetch
             p3_task = progress.add_task("[yellow]Phase 3: Deep Metrics Fetch...", total=len(passed_tech))
             
-            async def fetch_deep(d, task_id):
-                ticker = d['ticker']
-                res = await asyncio.gather(
-                    client.fetch_key_metrics(ticker),
-                    client.fetch_financial_ratios(ticker),
-                    client.fetch_share_float(ticker),
-                    client.fetch_stock_price_change(ticker),
-                    client.fetch_earnings_surprises(ticker),
-                    client.fetch_stock_grades(ticker),
-                    client.fetch_historical_stock_grades(ticker),
-                    client.fetch_historical_ratings(ticker),
-                    client.fetch_financial_scores(ticker),
-                    client.fetch_price_target_summary(ticker),
-                    client.fetch_stock_news(ticker, limit=max_recent_articles),
-                    client.fetch_company_profile(ticker)
+            # Pre-fetch bulk data if premium to avoid thousands of individual calls
+            bulk_profiles = {}
+            bulk_ratings = {}
+            bulk_scores = {}
+            bulk_targets = {}
+            bulk_consensus = {}
+            
+            if settings.FMP_PLAN == "premium":
+                p3_bulk_task = progress.add_task("[yellow]Phase 3: Bulk Data Pre-fetch...", total=5)
+                
+                # Fetch bulk data concurrently
+                profiles_res, ratings_res, scores_res, targets_res, consensus_res = await asyncio.gather(
+                    client.fetch_profile_bulk(use_csv=True),
+                    client.fetch_rating_bulk(use_csv=True),
+                    client.fetch_scores_bulk(use_csv=True),
+                    client.fetch_price_target_summary_bulk(use_csv=True),
+                    client.fetch_upgrades_downgrades_consensus_bulk(use_csv=True)
                 )
                 
+                # Build lookup maps
+                def build_map(data):
+                    m = {}
+                    for item in (data or []):
+                        sym = item.get('symbol')
+                        if sym and isinstance(sym, str):
+                            m[sym.upper()] = item
+                    return m
+
+                bulk_profiles = build_map(profiles_res)
+                bulk_ratings = build_map(ratings_res)
+                bulk_scores = build_map(scores_res)
+                bulk_targets = build_map(targets_res)
+                bulk_consensus = build_map(consensus_res)
+                
+                progress.advance(p3_bulk_task, 5)
+                progress.remove_task(p3_bulk_task)
+
+            async def fetch_deep(d, task_id):
+                ticker = d['ticker'].upper()
+                
+                # Use bulk data if available, otherwise fallback to individual fetch
+                # Note: Some metrics still need individual fetch as they are specific/historical
+                tasks = {
+                    "key_metrics": client.fetch_key_metrics(ticker),
+                    "ratios": client.fetch_financial_ratios(ticker),
+                    "share_float": client.fetch_share_float(ticker),
+                    "stock_price_change": client.fetch_stock_price_change(ticker),
+                    "earnings_surprises": client.fetch_earnings_surprises(ticker),
+                    "stock_grades": client.fetch_stock_grades(ticker),
+                    "historical_grades": client.fetch_historical_stock_grades(ticker),
+                    "historical_ratings": client.fetch_historical_ratings(ticker),
+                    "news": client.fetch_stock_news(ticker, limit=max_recent_articles)
+                }
+                
+                # Conditional fetching for things we might have in bulk
+                if ticker not in bulk_scores:
+                    tasks["financial_scores"] = client.fetch_financial_scores(ticker)
+                if ticker not in bulk_targets:
+                    tasks["price_target_summary"] = client.fetch_price_target_summary(ticker)
+                if ticker not in bulk_profiles:
+                    tasks["profile"] = client.fetch_company_profile(ticker)
+                
+                keys = list(tasks.keys())
+                res_values = await asyncio.gather(*tasks.values())
+                res = dict(zip(keys, res_values))
+                
+                # Merge bulk data
+                profile = (res.get("profile") or bulk_profiles.get(ticker) or {}).copy()
+                scores = res.get("financial_scores") or bulk_scores.get(ticker) or {}
+                targets = res.get("price_target_summary") or bulk_targets.get(ticker) or {}
+
+                # Add consensus if available
+                if ticker in bulk_consensus:
+                    profile["analyst_consensus"] = bulk_consensus[ticker]
+
+                # Add rating if available
+                if ticker in bulk_ratings:
+                    profile["bulk_rating"] = bulk_ratings[ticker]
+
                 # Extract most recent revenue and earnings from income statement for report builder
-                profile = res[11]
                 if d.get('income_statement'):
                     latest_is = d['income_statement'][0]
                     profile['recent_revenue'] = latest_is.get('revenue')
                     profile['recent_earnings'] = latest_is.get('netIncome')
 
                 d.update({
-                    "key_metrics": res[0], "ratios": res[1], "share_float": res[2],
-                    "stock_price_change": res[3], "earnings_surprises": res[4],
-                    "stock_grades": res[5], "historical_grades": res[6],
-                    "historical_ratings": res[7], "financial_scores": res[8],
-                    "price_target_summary": res[9], "news": res[10],
+                    "key_metrics": res.get("key_metrics"),
+                    "ratios": res.get("ratios"),
+                    "share_float": res.get("share_float"),
+                    "stock_price_change": res.get("stock_price_change"),
+                    "earnings_surprises": res.get("earnings_surprises"),
+                    "stock_grades": res.get("stock_grades"),
+                    "historical_grades": res.get("historical_grades"),
+                    "historical_ratings": res.get("historical_ratings"),
+                    "financial_scores": scores,
+                    "price_target_summary": targets,
+                    "news": res.get("news"),
                     "profile": profile
                 })
                 progress.advance(task_id)

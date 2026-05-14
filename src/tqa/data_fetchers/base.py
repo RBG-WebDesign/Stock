@@ -1,12 +1,14 @@
 # src/tqa/data_fetchers/base.py
 import asyncio
+import io
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Dict, Optional, Type, TypeVar, List
 
 import aiohttp
+import pandas as pd
 from config.settings import settings
 from tqa.utils.logger import logger
 
@@ -51,11 +53,13 @@ class BaseDataFetcher(ABC):
         Constructs the standard path: data/raw/<endpoint>/TICKER_YYYY-MM-DD.json
         """
         today = datetime.now().strftime("%Y-%m-%d")
-        # Clean endpoint name for filesystem
+        # Clean endpoint and ticker names for filesystem
         clean_endpoint = endpoint_name.replace("/", "-").strip("-")
+        clean_ticker = str(ticker).replace("/", "-").strip("-").upper()
+        
         endpoint_dir = settings.RAW_DATA_DIR / clean_endpoint
         endpoint_dir.mkdir(parents=True, exist_ok=True)
-        return endpoint_dir / f"{ticker.upper()}_{today}.json"
+        return endpoint_dir / f"{clean_ticker}_{today}.json"
 
     def _cleanup_old_cache(self, days: int) -> None:
         """
@@ -147,6 +151,17 @@ class BaseDataFetcher(ABC):
                     logger.debug(f"Requesting: {url} (Attempt {attempt + 1})")
                     async with session.get(url, params=params) as response:
                         if response.status == 200:
+                            # Handle CSV if requested or if content type is CSV
+                            is_csv_requested = params.get("datatype") == "csv"
+                            content_type = response.headers.get("Content-Type", "")
+                            
+                            if is_csv_requested or "text/csv" in content_type:
+                                csv_text = await response.text()
+                                df = pd.read_csv(io.StringIO(csv_text))
+                                # Replace NaN with None for JSON compatibility
+                                data = df.where(pd.notnull(df), None).to_dict(orient="records")
+                                return self._normalize_keys(data)
+                            
                             return await response.json()
                         
                         # Retry on rate limits (429) or server errors (5xx)
@@ -176,6 +191,18 @@ class BaseDataFetcher(ABC):
                     await asyncio.sleep(2 ** attempt)
 
         return None
+
+    def _normalize_keys(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Converts snake_case keys to camelCase for consistency with FMP JSON API."""
+
+        def to_camel(snake_str):
+            components = snake_str.split("_")
+            return components[0] + "".join(x.title() for x in components[1:])
+
+        normalized = []
+        for item in data:
+            normalized.append({to_camel(k): v for k, v in item.items()})
+        return normalized
 
     @abstractmethod
     async def fetch_ticker_data(self, ticker: str) -> Dict[str, Any]:

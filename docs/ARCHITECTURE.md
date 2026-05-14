@@ -18,6 +18,8 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 ### 1. Data Fetching (`src/tqa/data_fetchers/`)
 * **Responsibility:** Ingest raw market data (OHLCV) and comprehensive fundamental metrics (Income Statements, Institutional Ownership, Earnings Surprises, Analyst Estimates) concurrently.
 * **Rule:** All external API clients must inherit from `base.py`. No data transformation happens here; just fetching and standardizing the output into raw dictionaries or DataFrames.
+* **Normalization Layer:** `BaseDataFetcher` includes a `_normalize_keys` step for CSV payloads (e.g., bulk FMP data) to ensure camelCase consistency with standard JSON endpoints.
+* **Proactive Caching:** `FMPClient` supports "proactive caching" where bulk response records are automatically saved as individual ticker cache files, preventing redundant network calls during subsequent pipeline phases.
 * **Execution:** Must support async methods (e.g., `async def fetch_ticker_data()`).
 
 ### 2. Screening & Math (`src/tqa/screener/`)

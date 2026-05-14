@@ -73,9 +73,10 @@ class AnalysisOrchestrator:
             try:
                 # Format fundamentals to include pre-calculated metrics for better LLM performance
                 formatted_fundamentals = format_fundamentals_for_llm(
-                    ticker_data, 
+                    ticker_data,
                     news_summary_max_chars=summary_max_chars,
-                    max_recent_articles=max_articles
+                    max_recent_articles=max_articles,
+                    settings_override=settings
                 )
                 
                 analysis, actual_prompt = await client.analyze_ticker(
