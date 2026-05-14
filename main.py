@@ -264,13 +264,21 @@ async def run_pipeline(
                     client.fetch_stock_news(ticker, limit=max_recent_articles),
                     client.fetch_company_profile(ticker)
                 )
+                
+                # Extract most recent revenue and earnings from income statement for report builder
+                profile = res[11]
+                if d.get('income_statement'):
+                    latest_is = d['income_statement'][0]
+                    profile['recent_revenue'] = latest_is.get('revenue')
+                    profile['recent_earnings'] = latest_is.get('netIncome')
+
                 d.update({
                     "key_metrics": res[0], "ratios": res[1], "share_float": res[2],
                     "stock_price_change": res[3], "earnings_surprises": res[4],
                     "stock_grades": res[5], "historical_grades": res[6],
                     "historical_ratings": res[7], "financial_scores": res[8],
                     "price_target_summary": res[9], "news": res[10],
-                    "profile": res[11]
+                    "profile": profile
                 })
                 progress.advance(task_id)
                 return d

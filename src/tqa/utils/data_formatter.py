@@ -56,8 +56,8 @@ def format_fundamentals_for_llm(
             "date": date,
             "epsActual": actual,
             "epsEstimated": est,
-            "revenueActual": _format_number(s.get("revenueActual")),
-            "revenueEstimated": _format_number(s.get("revenueEstimated")),
+            "revenueActual": format_large_number(s.get("revenueActual")),
+            "revenueEstimated": format_large_number(s.get("revenueEstimated")),
             "surprise_pct": surprise_pct
         })
     
@@ -85,8 +85,8 @@ def format_fundamentals_for_llm(
         "recent_performance": _calculate_growth_metrics(income_statements),
         "margins_and_returns": _get_latest_ratios(ratios, key_metrics),
         "supply_demand": {
-            "float": _format_number(share_float.get("floatShares")),
-            "outstanding": _format_number(share_float.get("outstandingShares")),
+            "float": format_large_number(share_float.get("floatShares")),
+            "outstanding": format_large_number(share_float.get("outstandingShares")),
             "free_float_pct": f"{share_float.get('freeFloat', 0):.2f}%" if share_float.get('freeFloat') else None
         },
         "earnings_integrity": {
@@ -137,12 +137,12 @@ def format_fundamentals_for_llm(
     if estimates:
         formatted["future_outlook"] = {
             "next_quarter_eps_est": estimates[0].get("epsAvg"),
-            "next_quarter_revenue_est": _format_number(estimates[0].get("revenueAvg"))
+            "next_quarter_revenue_est": format_large_number(estimates[0].get("revenueAvg"))
         }
     
     return formatted
 
-def _format_number(val: Any) -> Any:
+def format_large_number(val: Any) -> Any:
     """Converts large numbers to human readable M/B suffixes."""
     if val is None or not isinstance(val, (int, float)):
         return val

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fpdf import FPDF
 from datetime import datetime
 from config.settings import settings
+from tqa.utils.data_formatter import format_large_number
 
 class PDFGenerator(FPDF):
     def __init__(self):
@@ -55,6 +56,13 @@ class PDFGenerator(FPDF):
             self.cell(0, 10, f"Page {self.page_no()}", align="R")
             self.ln(15)
         self.set_text_color(*self.theme_text)
+
+    def write_labeled_value(self, label: str, value: str, is_last: bool = False):
+        self.set_font(self.default_font, "B", 9)
+        self.write(5, f"{label}: ")
+        self.set_font(self.default_font, "", 9)
+        suffix = " | " if not is_last else ""
+        self.write(5, f"{str(value)}{suffix}")
 
     def draw_badge(self, text: str, score: int):
         if score >= 8:
@@ -320,23 +328,32 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
             pdf.set_font(pdf.default_font, "", 9)
             pdf.set_text_color(*pdf.theme_text)
             
-            mkt_cap = profile.get('mktCap', 0)
-            mkt_cap_str = f"${mkt_cap/1e9:.2f}B" if mkt_cap >= 1e9 else (f"${mkt_cap/1e6:.2f}M" if mkt_cap > 0 else "N/A")
+            # --- Company Metadata Row 1 ---
+            pdf.write_labeled_value("Sector", profile.get('sector', 'N/A'))
+            pdf.write_labeled_value("Industry", profile.get('industry', 'N/A'))
+            pdf.write_labeled_value("Country", profile.get('country', 'N/A'))
+            pdf.write_labeled_value("Exchange", profile.get('exchange') or profile.get('exchangeShortName', 'N/A'))
+            pdf.ln(5)
+
+            # --- Company Metadata Row 2 ---
+            mkt_cap = profile.get('marketCap') or profile.get('mktCap')
+            mkt_cap_str = f"${format_large_number(mkt_cap)}" if mkt_cap else "N/A"
+            pdf.write_labeled_value("Market Cap", mkt_cap_str, is_last=True)
+
+            rev = profile.get('recent_revenue')
+            rev_str = f"${format_large_number(rev)}" if rev else "N/A"
+            pdf.write_labeled_value("Revenue", rev_str)
             
-            overview = (
-                f"Sector: {profile.get('sector', 'N/A')} | "
-                f"Industry: {profile.get('industry', 'N/A')} | "
-                f"Market Cap: {mkt_cap_str} | "
-                f"Beta: {profile.get('beta', 'N/A')} | "
-                f"Exchange: {profile.get('exchangeShortName', 'N/A')}"
-            )
-            pdf.cell(0, 5, overview, ln=True)  # Reduced from 6 → 5
+            earn = profile.get('recent_earnings')
+            earn_str = f"${format_large_number(earn)}" if earn else "N/A"
+            pdf.write_labeled_value("Earnings", earn_str, is_last=True)
+            pdf.ln(6)
             
             desc = profile.get('description', '')
             if desc:
-                if len(desc) > 400:
-                    desc = desc[:400] + "..."
-                pdf.set_font(pdf.default_font, "I", 8)
+                if len(desc) > 500:
+                    desc = desc[:500] + "..."
+                pdf.set_font(pdf.default_font, "", 8) # No italics, smaller font
                 pdf.multi_cell(0, 4, desc)
             pdf.ln(3)  # Reduced from 5 → 3
         
