@@ -56,17 +56,11 @@ class PDFGenerator(FPDF):
             self.ln(15)
         self.set_text_color(*self.theme_text)
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font(self.default_font, "I", 8)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f"Confidential Proprietary Analysis - {datetime.now().year}", align="C")
-
     def draw_badge(self, text: str, score: int):
         if score >= 8:
             color = self.theme_success
         elif score >= 5:
-            color = (255, 152, 0) # Orange
+            color = (255, 152, 0)  # Orange
         else:
             color = self.theme_danger
             
@@ -81,28 +75,32 @@ class PDFGenerator(FPDF):
         self.set_text_color(*self.theme_text)
         return w
 
-    def draw_metric_box(self, label: str, value: str, color=None):
+    def draw_metric_box(self, label: str, value: str, color=None, w=60, h=18):
         start_x = self.get_x()
         start_y = self.get_y()
-        w = 60
-        h = 20
         
         self.set_fill_color(*self.theme_light_grey)
         self.rect(start_x, start_y, w, h, 'F')
         
-        self.set_font(self.default_font, "B", 8)
+        self.set_font(self.default_font, "B", 7)
         self.set_text_color(100, 100, 100)
         self.set_xy(start_x + 2, start_y + 2)
-        self.cell(w-4, 5, label.upper(), ln=True)
+        self.cell(w - 4, 4, label.upper(), ln=True)
         
-        self.set_font(self.default_font, "B", 14)
+        self.set_font(self.default_font, "B", 13)
         if color:
             self.set_text_color(*color)
         else:
             self.set_text_color(*self.theme_text)
-            
-        self.set_xy(start_x + 2, start_y + 8)
-        self.cell(w-4, 10, str(value))
+        
+        # Center value in the remaining space below the label
+        label_bottom = start_y + 2 + 4  # label top offset + label height
+        remaining_h = (start_y + h) - label_bottom
+        value_h = 6  # approximate glyph height for font size 13
+        centered_y = label_bottom + (remaining_h - value_h) / 2
+
+        self.set_xy(start_x + 2, centered_y)
+        self.cell(w - 4, value_h, str(value))
         
         self.set_xy(start_x + w, start_y)
         self.set_text_color(*self.theme_text)
@@ -110,10 +108,91 @@ class PDFGenerator(FPDF):
     def chapter_title(self, label: str):
         self.set_font(self.default_font, "B", 14)
         self.set_text_color(*self.theme_primary)
-        self.cell(0, 10, label, ln=True)
+        self.cell(0, 8, label, ln=True)  # Reduced from 10 → 8
         self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
-        self.ln(5)
+        self.ln(3)  # Reduced from 5 → 3
         self.set_text_color(*self.theme_text)
+
+    def draw_parameter_grid(self, config: Dict[str, Any]):
+        self.set_font(self.default_font, "B", 11)
+        self.set_text_color(*self.theme_primary)
+        self.cell(0, 8, "Run Configuration Parameters", ln=True)  # Reduced from 10 → 8
+        self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
+        self.ln(4)  # Reduced from 5 → 4
+        
+        self.set_font(self.default_font, "", 9)
+        self.set_text_color(*self.theme_text)
+        
+        params = []
+        # Pipeline
+        p = config.get("pipeline", {})
+        params.extend([
+            ("Model", str(config.get("model", p.get("model", "N/A")))),
+            ("Universe Limit", str(config.get("universe_limit", p.get("universe_limit", "N/A")))),
+            ("Prompt Mode", str(config.get("prompt_mode", p.get("prompt_mode", "N/A")))),
+            ("Max News Chars", str(config.get("news_summary_max_chars", p.get("news_summary_max_chars", "N/A")))),
+        ])
+        
+        # Fundamental
+        f = config.get("fundamental_filters", {})
+        params.extend([
+            ("Min EPS Growth", f"{config.get('min_eps_growth', f.get('min_eps_growth', 'N/A'))}%"),
+            ("Min Latest EPS", str(config.get("min_latest_eps", f.get("min_latest_eps", "None")))),
+            ("Min Rev Growth", f"{config.get('min_rev_growth', f.get('min_rev_growth', 'N/A'))}%"),
+            ("Max Rev Growth", f"{config.get('max_rev_growth', f.get('max_rev_growth', 'None'))}%"),
+            ("Min Prev EPS", str(config.get("min_prev_eps", f.get("min_prev_eps", "None")))),
+            ("Max Prev EPS", str(config.get("max_prev_eps", f.get("max_prev_eps", "None")))),
+        ])
+
+        # Market Cap
+        mc = config.get("market_cap", {})
+        def format_mc(val):
+            try:
+                if val is None or val == "None": return "None"
+                return f"${int(val):,}"
+            except:
+                return "None"
+
+        min_mc = config.get('min_market_cap')
+        if min_mc is None and mc.get('min_m'): min_mc = int(mc.get('min_m') * 1e6)
+        
+        max_mc = config.get('max_market_cap')
+        if max_mc is None and mc.get('max_m'): max_mc = int(mc.get('max_m') * 1e6)
+
+        params.extend([
+            ("Min Market Cap", format_mc(min_mc)),
+            ("Max Market Cap", format_mc(max_mc))
+        ])
+
+        # Draw in 2 columns
+        col_w = (210 - self.l_margin - self.r_margin) / 2
+        for i in range(0, len(params), 2):
+            p1 = params[i]
+            self.set_font(self.default_font, "B", 9)
+            self.cell(35, 6, f"{p1[0]}:")  # Reduced row height from 7 → 6
+            self.set_font(self.default_font, "", 9)
+            self.cell(col_w - 35, 6, p1[1])
+            
+            if i + 1 < len(params):
+                p2 = params[i + 1]
+                self.set_font(self.default_font, "B", 9)
+                self.cell(35, 6, f"{p2[0]}:")
+                self.set_font(self.default_font, "", 9)
+                self.cell(col_w - 35, 6, p2[1], ln=True)
+            else:
+                self.ln(6)
+
+        # Technical Filters
+        tech = config.get("technical_filters")
+        if tech:
+            self.ln(3)  # Reduced from 5 → 3
+            self.set_font(self.default_font, "B", 9)
+            self.cell(0, 6, "Technical Filters:", ln=True)
+            self.set_font(self.default_font, "", 8)
+            filter_text = ", ".join(tech)
+            self.multi_cell(0, 4, filter_text)
+        
+        self.ln(6)  # Reduced from 10 → 6
 
     def funnel_infographic(self, stats: Dict[str, int]):
         self.chapter_title("Pipeline Filtering Funnel")
@@ -130,26 +209,25 @@ class PDFGenerator(FPDF):
             ("Universe (Initial)", f"{u}", "100%"),
             ("Fundamental Filter", f"{f}", f"{safe_pct(f, u):.1f}%"),
             ("Technical Filter", f"{t}", f"{safe_pct(t, f):.1f}%"),
-            ("Final Watchlist", f"{w}", f"{safe_pct(w, t):.1f}%")
         ]
         
         self.set_font(self.default_font, "B", 10)
         self.set_fill_color(*self.theme_primary)
         self.set_text_color(255, 255, 255)
-        self.cell(80, 10, " Stage", 1, 0, 'L', True)
-        self.cell(40, 10, " Count", 1, 0, 'C', True)
-        self.cell(40, 10, " Retention", 1, 1, 'C', True)
+        self.cell(80, 9, " Stage", 1, 0, 'L', True)   # Reduced from 10 → 9
+        self.cell(40, 9, " Count", 1, 0, 'C', True)
+        self.cell(40, 9, " Retention", 1, 1, 'C', True)
         
         self.set_font(self.default_font, "", 10)
         self.set_text_color(*self.theme_text)
         for i, (label, count, pct) in enumerate(cols):
             fill = (i % 2 == 1)
             if fill: self.set_fill_color(*self.theme_light_grey)
-            self.cell(80, 10, f" {label}", 1, 0, 'L', fill)
-            self.cell(40, 10, count, 1, 0, 'C', fill)
-            self.cell(40, 10, pct, 1, 1, 'C', fill)
+            self.cell(80, 9, f" {label}", 1, 0, 'L', fill)
+            self.cell(40, 9, count, 1, 0, 'C', fill)
+            self.cell(40, 9, pct, 1, 1, 'C', fill)
         
-        self.ln(10)
+        self.ln(6)  # Reduced from 10 → 6
 
     def rounded_rect(self, x, y, w, h, r, style=''):
         k = self.k
@@ -213,76 +291,102 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
     pdf.alias_nb_pages()
     pdf.add_page()
     
-    pdf.chapter_title(f"Executive Summary - Session {session_id}")
-    pdf.set_font(pdf.default_font, "", 10)
-    
-    pdf.set_font(pdf.default_font, "B", 10)
-    pdf.cell(40, 7, "Model:")
-    pdf.set_font(pdf.default_font, "", 10)
-    pdf.cell(0, 7, f"{config.get('model', 'Unknown')}", ln=True)
-    
-    pdf.set_font(pdf.default_font, "B", 10)
-    pdf.cell(40, 7, "Min EPS Growth:")
-    pdf.set_font(pdf.default_font, "", 10)
-    pdf.cell(0, 7, f"{config.get('min_eps_growth')}%", ln=True)
-    
-    pdf.set_font(pdf.default_font, "B", 10)
-    pdf.cell(40, 7, "Prompt Mode:")
-    pdf.set_font(pdf.default_font, "", 10)
-    pdf.cell(0, 7, f"{config.get('prompt_mode', 'N/A')}", ln=True)
-    pdf.ln(5)
-    
+    pdf.draw_parameter_grid(config)
     pdf.funnel_infographic(config.get("funnel_stats", {}))
     
     for stock in final_stocks:
         ticker = stock.get("ticker")
         res = stock.get("response", {})
         conf = res.get("confidence_score", 0)
+        profile = stock.get("profile", {})
         
         pdf.add_page()
         
-        pdf.set_font(pdf.default_font, "B", 28)
+        # --- Ticker + Confidence badge row ---
+        pdf.set_font(pdf.default_font, "B", 26)  # Slightly reduced from 28
         pdf.set_text_color(*pdf.theme_primary)
-        pdf.cell(80, 15, ticker)
-        
-        pdf.set_y(pdf.get_y() + 4)
+        pdf.cell(80, 12, ticker)  # Reduced height from 15 → 12
+
+        pdf.set_y(pdf.get_y() + 2)  # Reduced nudge from 4 → 2
         pdf.set_x(120)
         pdf.draw_badge(f"CONFIDENCE: {conf}/10", conf)
-        pdf.ln(15)
+        pdf.ln(10)  # Reduced from 15 → 10
+
+        # --- Company Profile Section ---
+        if profile:
+            pdf.set_font(pdf.default_font, "B", 10)
+            pdf.set_text_color(*pdf.theme_primary)
+            pdf.cell(0, 6, "Company Overview", ln=True)  # Reduced from 8 → 6
+            pdf.set_font(pdf.default_font, "", 9)
+            pdf.set_text_color(*pdf.theme_text)
+            
+            mkt_cap = profile.get('mktCap', 0)
+            mkt_cap_str = f"${mkt_cap/1e9:.2f}B" if mkt_cap >= 1e9 else (f"${mkt_cap/1e6:.2f}M" if mkt_cap > 0 else "N/A")
+            
+            overview = (
+                f"Sector: {profile.get('sector', 'N/A')} | "
+                f"Industry: {profile.get('industry', 'N/A')} | "
+                f"Market Cap: {mkt_cap_str} | "
+                f"Beta: {profile.get('beta', 'N/A')} | "
+                f"Exchange: {profile.get('exchangeShortName', 'N/A')}"
+            )
+            pdf.cell(0, 5, overview, ln=True)  # Reduced from 6 → 5
+            
+            desc = profile.get('description', '')
+            if desc:
+                if len(desc) > 400:
+                    desc = desc[:400] + "..."
+                pdf.set_font(pdf.default_font, "I", 8)
+                pdf.multi_cell(0, 4, desc)
+            pdf.ln(3)  # Reduced from 5 → 3
         
         pdf.set_text_color(*pdf.theme_text)
-        
+
+        # --- Metric boxes ---
         y_metrics = pdf.get_y()
-        pdf.draw_metric_box("Entry Pivot", f"${res.get('suggested_entry_pivot', 'N/A')}", pdf.theme_success)
-        pdf.set_xy(80, y_metrics)
-        pdf.draw_metric_box("Stop Loss", f"${res.get('suggested_stop_loss', 'N/A')}", pdf.theme_danger)
-        
+        box_w = 46   # Slightly narrower (was 48)
+        box_h = 14   # Reduced from 15 → 14
+        spacing = 2
+
+        pdf.draw_metric_box("Entry Pivot", f"${res.get('suggested_entry_pivot', 'N/A')}", pdf.theme_success, w=box_w, h=box_h)
+
+        pdf.set_xy(pdf.get_x() + spacing, y_metrics)
+        pdf.draw_metric_box("Stop Loss", f"${res.get('suggested_stop_loss', 'N/A')}", pdf.theme_danger, w=box_w, h=box_h)
+
         entry = res.get('suggested_entry_pivot')
         stop = res.get('suggested_stop_loss')
-        rr_val = "N/A"
+        rr_val, target_val = "N/A", "N/A"
         if isinstance(entry, (int, float)) and isinstance(stop, (int, float)) and entry > stop:
             risk = entry - stop
-            reward = entry * 0.20 
-            rr_val = f"{(reward/risk):.2f}:1"
-            
-        pdf.set_xy(145, y_metrics)
-        pdf.draw_metric_box("Est. Risk/Reward", rr_val)
-        pdf.ln(25)
-        
+            reward = entry * 0.20
+            rr_val = f"{(reward / risk):.2f}:1"
+            target_val = f"${(entry * 1.20):.2f}"
+
+        pdf.set_xy(pdf.get_x() + spacing, y_metrics)
+        pdf.draw_metric_box("Target (20%)", target_val, w=box_w, h=box_h)
+
+        pdf.set_xy(pdf.get_x() + spacing, y_metrics)
+        pdf.draw_metric_box("Reward/Risk", rr_val, w=box_w, h=box_h)
+
+        pdf.set_y(y_metrics + box_h + 4)  # Reduced trailing gap from 5 → 4
+
         epw = pdf.epw
-        
+
+        # --- Section writer ---
         def write_section(title, text, color=None):
-            pdf.set_font(pdf.default_font, "B", 11)
-            if color: pdf.set_text_color(*color)
-            else: pdf.set_text_color(*pdf.theme_primary)
-            pdf.cell(0, 8, title, ln=True)
+            pdf.set_font(pdf.default_font, "B", 10)  # Reduced from 11 → 10
+            if color:
+                pdf.set_text_color(*color)
+            else:
+                pdf.set_text_color(*pdf.theme_primary)
+            pdf.cell(0, 6, title, ln=True)  # Reduced from 8 → 6
             pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + epw, pdf.get_y())
-            pdf.ln(2)
+            pdf.ln(2)  # Reduced from 2 (unchanged, already tight)
             
-            pdf.set_font(pdf.default_font, "", 10)
+            pdf.set_font(pdf.default_font, "", 9)  # Reduced from 10 → 9
             pdf.set_text_color(*pdf.theme_text)
-            pdf.multi_cell(epw, 5, str(text))
-            pdf.ln(5)
+            pdf.multi_cell(epw, 4, str(text))  # Reduced line height from 5 → 4
+            pdf.ln(3)  # Reduced from 5 → 3
 
         tech_setup = res.get('primary_pattern', res.get('base_classification', 'N/A'))
         fund_catalyst = res.get('fundamental_catalyst', 'N/A')
@@ -304,20 +408,26 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
             write_section("Technical Setup", tech_setup)
             write_section("Fundamental Catalyst", fund_catalyst)
             write_section("Investment Thesis (Bull Case)", bull_thesis)
-            
+
+            # --- Risk / Bear Case box ---
             curr_y = pdf.get_y()
             pdf.set_fill_color(255, 245, 245)
-            lines = pdf.multi_cell(epw, 5, f"RISK ASSESSMENT: {bear_risks}", split_only=True)
-            h = (len(lines) + 2) * 5 + 10
-            
+
+            lines = pdf.multi_cell(epw - 4, 4, f"RISK ASSESSMENT: {bear_risks}", split_only=True)
+            header_height = 6   # Matches the reduced title cell height
+            content_height = len(lines) * 4   # Matches the reduced line height
+            h = header_height + content_height + 5  # Tighter padding (was 6)
+
             if curr_y + h > 250:
                 pdf.add_page()
                 curr_y = pdf.get_y()
-                
-            pdf.rect(pdf.l_margin, curr_y, epw, h, 'F')
-            pdf.set_xy(pdf.l_margin + 2, curr_y + 2)
-            write_section("Risk Assessment & Bear Case", bear_risks, pdf.theme_danger)
 
+            pdf.rect(pdf.l_margin, curr_y, epw, h, 'F')
+            pdf.set_xy(pdf.l_margin, curr_y + 2)
+            write_section("Risk Assessment (Bear Case)", bear_risks, pdf.theme_danger)
+            pdf.set_y(curr_y + h + 4)  # Reduced trailing gap from 5 → 4
+
+        # --- Charts ---
         chart_dir = Path("data/charts")
         today = datetime.now().strftime("%Y-%m-%d")
         daily_chart = chart_dir / f"{ticker}_daily_{today}.png"
@@ -336,9 +446,9 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
                 pdf.add_page()
                 y_start = pdf.get_y()
             
-            pdf.set_font(pdf.default_font, "B", 11)
+            pdf.set_font(pdf.default_font, "B", 10)  # Reduced from 11 → 10
             pdf.set_text_color(*pdf.theme_primary)
-            pdf.cell(0, 10, "Technical Charts (Daily & Weekly)", ln=True)
+            pdf.cell(0, 8, "Technical Charts (Daily & Weekly)", ln=True)
             y_img = pdf.get_y()
             
             if daily_chart.exists() and weekly_chart.exists():

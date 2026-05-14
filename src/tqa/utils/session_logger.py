@@ -107,7 +107,7 @@ class SessionLogger:
         except Exception:
             return "[Unserializable Response]"
 
-    async def log_prompt(self, ticker: str, prompt: str, response: Any, model: str, include_prompt: bool = True):
+    async def log_prompt(self, ticker: str, prompt: str, response: Any, model: str, include_prompt: bool = True, profile: Optional[Dict] = None):
         """Logs a single LLM interaction with robust serialization and error handling."""
         try:
             # Validate required fields
@@ -119,7 +119,8 @@ class SessionLogger:
                 "ticker": ticker or "UNKNOWN",
                 "model": model or "UNKNOWN",
                 "prompt": prompt if include_prompt else "[PROMPT LOGGING DISABLED]",
-                "response": self._serialize_response(response)
+                "response": self._serialize_response(response),
+                "profile": profile
             }
             
             def append_log():

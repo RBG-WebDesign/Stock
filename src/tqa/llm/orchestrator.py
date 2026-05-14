@@ -26,7 +26,9 @@ class AnalysisOrchestrator:
         session: Optional[SessionLogger] = None,
         save_prompts: bool = False,
         model: str = settings.DEFAULT_MODEL,
-        prompt_mode: str = settings.DEFAULT_PROMPT_KEY
+        prompt_mode: str = settings.DEFAULT_PROMPT_KEY,
+        summary_max_chars: Optional[int] = None,
+        max_articles: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Runs analysis for multiple tickers in parallel with concurrency control.
@@ -34,7 +36,14 @@ class AnalysisOrchestrator:
         logger.info(f"Starting parallel analysis for {len(tickers_data)} tickers using {model}...")
         
         async with OpenRouterClient(model=model) as client:
-            tasks = [self._process_ticker(client, data, session, save_prompts, prompt_mode=prompt_mode) for data in tickers_data]
+            tasks = [
+                self._process_ticker(
+                    client, data, session, save_prompts, 
+                    prompt_mode=prompt_mode, 
+                    summary_max_chars=summary_max_chars,
+                    max_articles=max_articles
+                ) for data in tickers_data
+            ]
             results = await asyncio.gather(*tasks)
             
         logger.info(f"Parallel analysis complete. Processed {len(results)} tickers.")
@@ -46,7 +55,9 @@ class AnalysisOrchestrator:
         ticker_data: Dict[str, Any],
         session: Optional[SessionLogger] = None,
         save_prompts: bool = False,
-        prompt_mode: str = settings.DEFAULT_PROMPT_KEY
+        prompt_mode: str = settings.DEFAULT_PROMPT_KEY,
+        summary_max_chars: Optional[int] = None,
+        max_articles: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Processes a single ticker: analysis and saving report.
@@ -61,7 +72,11 @@ class AnalysisOrchestrator:
         async with self.semaphore:
             try:
                 # Format fundamentals to include pre-calculated metrics for better LLM performance
-                formatted_fundamentals = format_fundamentals_for_llm(ticker_data)
+                formatted_fundamentals = format_fundamentals_for_llm(
+                    ticker_data, 
+                    news_summary_max_chars=summary_max_chars,
+                    max_recent_articles=max_articles
+                )
                 
                 analysis, actual_prompt = await client.analyze_ticker(
                     ticker=ticker,
@@ -79,7 +94,14 @@ class AnalysisOrchestrator:
                     
                     # Log to session if provided
                     if session:
-                        await session.log_prompt(ticker, actual_prompt, analysis, client.model, include_prompt=save_prompts)
+                        await session.log_prompt(
+                            ticker,
+                            actual_prompt,
+                            analysis,
+                            client.model,
+                            include_prompt=save_prompts,
+                            profile=ticker_data.get("profile")
+                        )
                 else:
                     logger.error(f"Analysis failed for {ticker}")
 

@@ -1,15 +1,23 @@
 # src/tqa/utils/data_formatter.py
 import math
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import pandas as pd
 from config.settings import settings
 
-def format_fundamentals_for_llm(ticker_data: Dict[str, Any]) -> Dict[str, Any]:
+def format_fundamentals_for_llm(
+    ticker_data: Dict[str, Any],
+    news_summary_max_chars: Optional[int] = None,
+    max_recent_articles: Optional[int] = None
+) -> Dict[str, Any]:
     """
     Takes raw ticker data and returns a structured dictionary with pre-calculated 
     growth metrics to assist the LLM in its analysis.
     """
+    # Use provided overrides or fallback to settings
+    news_max_chars = news_summary_max_chars or settings.NEWS_SUMMARY_MAX_CHARS
+    articles_limit = max_recent_articles or settings.MAX_RECENT_ARTICLES
+
     ticker = ticker_data.get("ticker", "UNKNOWN")
     income_statements = ticker_data.get("income_statement", [])
     key_metrics = ticker_data.get("key_metrics", [])
@@ -114,9 +122,9 @@ def format_fundamentals_for_llm(ticker_data: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "title": n.get("title"), 
                 "date": n.get("publishedDate"), 
-                "summary": n.get("text")[:settings.NEWS_SUMMARY_MAX_CHARS] + "..." if n.get("text") else ""
+                "summary": n.get("text")[:news_max_chars] + "..." if n.get("text") else ""
             }
-            for n in news[:settings.MAX_RECENT_ARTICLES]
+            for n in news[:articles_limit]
         ]
     }
     

@@ -24,7 +24,8 @@ The system is strictly modular. An AI agent modifying this codebase must respect
 * **Responsibility:** Act as the "Bouncer." Apply deterministic mathematical filters to narrow the universe to high-probability candidates.
 * **Waterfall Approach:** To optimize performance and API costs, candidates are filtered in sequential phases:
     1.  **Phase 1: Fundamentals:** Discard stocks without significant YoY EPS or Revenue growth (default > 20%). Uses absolute EPS thresholds to avoid low-base distortions.
-    2.  **Phase 2: Technicals:** Apply a strict 7-point "Trend Template" (Price > 50 SMA > 100 SMA > 200 SMA, 52-week range relative strength, and 200 SMA uptrend) to ensure the stock is in a confirmed uptrend.
+    2.  **Phase 2: Technicals:** Apply modular filtering conditions. Instead of hardcoded rules, the system evaluates logical expressions (e.g., `price > sma_200`) against a suite of calculated technical indicators.
+* **Dynamic Indicators:** The screener automatically computes SMAs (10, 20, 50, 100, 200), their 1-month-ago historical values (for trend detection), 52-week highs/lows, and average volume.
 * **Rule:** No LLM logic or charting logic belongs here. This module only uses data required for initial screening (Income Statements and basic Price History).
 
 ### 3. Visualization (`src/tqa/charting/`)

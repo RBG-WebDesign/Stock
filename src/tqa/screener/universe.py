@@ -1,6 +1,7 @@
 # src/tqa/screener/universe.py
 from typing import Any, Dict, List, Optional
 import pandas as pd
+import re
 from tqa.utils.logger import logger
 from config.settings import settings
 
@@ -19,7 +20,8 @@ class Screener:
         min_prev_eps: Optional[float] = None,
         max_prev_eps: Optional[float] = None,
         min_latest_eps: Optional[float] = None,
-        require_acceleration: bool = False
+        require_acceleration: bool = False,
+        technical_filters: Optional[List[str]] = None
     ):
         self.min_eps_growth = min_eps_growth
         self.min_rev_growth = min_rev_growth
@@ -28,6 +30,18 @@ class Screener:
         self.max_prev_eps = max_prev_eps
         self.min_latest_eps = min_latest_eps
         self.require_acceleration = require_acceleration
+        # Default to Mark Minervini's Trend Template if no filters provided
+        self.technical_filters = technical_filters or [
+            "price > sma_100",
+            "price > sma_200",
+            "sma_100 > sma_200",
+            "sma_200 > sma_200_22d",
+            "sma_50 > sma_100",
+            "sma_50 > sma_200",
+            "price > sma_50",
+            "price >= 1.30 * low_52w",
+            "price >= 0.75 * high_52w"
+        ]
 
     def check_fundamentals(self, income_statements: List[Dict[str, Any]]) -> bool:
         """
@@ -83,75 +97,80 @@ class Screener:
 
     def check_technicals(self, historical_data: List[Dict[str, Any]]) -> bool:
         """
-        Waterfall Phase 2: Technical Filter (Trend Template).
-        Requires at least 200+ days of historical data.
+        Waterfall Phase 2: Technical Filter.
+        Evaluates dynamic filters against historical price data.
         """
-        if not historical_data or len(historical_data) < 200:
+        if not historical_data:
+            logger.debug("Technical check failed: No historical data provided.")
             return False
             
-        # Convert to DataFrame for easier indicator calculation
-        df = pd.DataFrame(historical_data)
-        # Data is newest to oldest, so we reverse it for rolling calculations
-        df = df.iloc[::-1].reset_index(drop=True)
-        
-        closes = df["close"]
-        highs = df["high"]
-        lows = df["low"]
-        
-        # Calculate SMAs
-        sma_50 = closes.rolling(window=50).mean()
-        sma_100 = closes.rolling(window=100).mean()
-        sma_200 = closes.rolling(window=200).mean()
-        
-        # Check for NaNs in the latest indicator values
-        if pd.isna(sma_50.iloc[-1]) or pd.isna(sma_100.iloc[-1]) or pd.isna(sma_200.iloc[-1]):
-            logger.debug("Technical failure: SMA indicators contain NaN.")
+        if len(historical_data) < 252:
+            # We need at least 252 days for 52-week highs/lows
+            logger.debug(f"Technical check failed: Insufficient historical data ({len(historical_data)} days).")
+            return False
+            
+        try:
+            # Convert to DataFrame for easier indicator calculation
+            df = pd.DataFrame(historical_data)
+            # Data is newest to oldest, so we reverse it for rolling calculations
+            df = df.iloc[::-1].reset_index(drop=True)
+            
+            # Basic validation of required columns
+            required_cols = {"close", "low", "high", "volume"}
+            missing = required_cols - set(df.columns)
+            if missing:
+                logger.error(f"Technical check failed: Missing columns {missing}")
+                return False
+
+            # Standard Indicators Calculation
+            df["price"] = df["close"]
+            
+            # Dynamically discover requested SMA windows from the filters
+            requested_windows = {10, 20, 50, 100, 150, 200} # Default set
+            for condition in self.technical_filters:
+                matches = re.findall(r"sma_(\d+)", condition)
+                for m in matches:
+                    requested_windows.add(int(m))
+            
+            for window in requested_windows:
+                df[f"sma_{window}"] = df["close"].rolling(window=window).mean()
+                # Historical trend value (1 month ago / 22 trading days)
+                df[f"sma_{window}_22d"] = df[f"sma_{window}"].shift(22)
+                
+            # 52-Week Range
+            df["low_52w"] = df["low"].rolling(window=252).min()
+            df["high_52w"] = df["high"].rolling(window=252).max()
+            
+            # Volume Indicators
+            df["vol_avg_20"] = df["volume"].rolling(window=20).mean()
+
+        except Exception as e:
+            logger.error(f"Error calculating technical indicators: {e}")
             return False
 
-        curr_price = closes.iloc[-1]
-        curr_sma_50 = sma_50.iloc[-1]
-        curr_sma_100 = sma_100.iloc[-1]
-        curr_sma_200 = sma_200.iloc[-1]
-        
-        # 52-Week Range
-        last_252 = df.tail(252)
-        low_52w = last_252["low"].min()
-        high_52w = last_252["high"].max()
-        
-        # --- Trend Template Criteria ---
-        
-        # 1. Price > 100 SMA and Price > 200 SMA
-        c1 = curr_price > curr_sma_100 and curr_price > curr_sma_200
-        
-        # 2. 100 SMA > 200 SMA
-        c2 = curr_sma_100 > curr_sma_200
-        
-        # 3. 200 SMA is trending up for at least 1 month (approx 22-30 trading days)
-        # We check if the 200 SMA today is higher than it was 22 days ago
-        c3 = False
-        if len(sma_200) >= 22:
-            prev_sma_200 = sma_200.iloc[-22]
-            if not pd.isna(prev_sma_200):
-                c3 = curr_sma_200 > prev_sma_200
-        
-        # 4. 50 SMA > 100 SMA and 50 SMA > 200 SMA
-        c4 = curr_sma_50 > curr_sma_100 and curr_sma_50 > curr_sma_200
-        
-        # 5. Price > 50 SMA
-        c5 = curr_price > curr_sma_50
-        
-        # 6. Price is at least 30% above 52-week low
-        c6 = curr_price >= (1.30 * low_52w)
-        
-        # 7. Price is within 25% of 52-week high
-        c7 = curr_price >= (0.75 * high_52w)
-        
-        passed = all([c1, c2, c3, c4, c5, c6, c7])
-        
-        if not passed:
-            logger.debug(f"Technical failure: c1={c1}, c2={c2}, c3={c3}, c4={c4}, c5={c5}, c6={c6}, c7={c7}")
-            
-        return passed
+        # Evaluate all dynamic filters
+        for condition in self.technical_filters:
+            try:
+                # Use pandas eval on the entire dataframe to generate a boolean series,
+                # then check the value for the latest row.
+                results = df.eval(condition)
+                
+                # If results is a Series, get the last value. If it's a scalar, it's a constant.
+                if isinstance(results, pd.Series):
+                    # Check if the result is valid (not NaN) and Truthy
+                    val = results.iloc[-1]
+                    if pd.isna(val) or not val:
+                        logger.debug(f"Technical failure: Condition '{condition}' failed for latest row.")
+                        return False
+                elif not results:
+                    logger.debug(f"Technical failure: Condition '{condition}' evaluated to False.")
+                    return False
+            except Exception as e:
+                # Log the specific condition that failed and the error, but return False instead of crashing
+                logger.error(f"Error evaluating technical filter '{condition}': {e}")
+                return False
+                
+        return True
 
     def apply_filters(self, ticker_data: Dict[str, Any]) -> bool:
         """

@@ -322,6 +322,21 @@ class FMPClient(BaseDataFetcher):
             return data[0]
         return data if data else {}
 
+    async def fetch_company_profile(self, ticker: str) -> Dict[str, Any]:
+        """Fetches detailed company profile (industry, description, CEO, etc.)."""
+        endpoint = "profile"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {"symbol": ticker.upper()}
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker,
+            url=url,
+            params=params
+        )
+        if data and isinstance(data, list):
+            return data[0]
+        return data if data else {}
+
     async def fetch_historical_prices(self, ticker: str, years: int = 4) -> List[Dict[str, Any]]:
         """Fetches OHLCV data for charting and local indicator calculation."""
         endpoint = "historical-price-eod/full"
@@ -432,7 +447,8 @@ class FMPClient(BaseDataFetcher):
             "financial_scores": self.fetch_financial_scores(ticker),
             "price_target_summary": self.fetch_price_target_summary(ticker),
             "news": self.fetch_stock_news(ticker, limit=settings.MAX_RECENT_ARTICLES),
-            "historical": self.fetch_historical_prices(ticker)
+            "historical": self.fetch_historical_prices(ticker),
+            "profile": self.fetch_company_profile(ticker)
         }
         
         # Only include premium endpoints if specified in settings

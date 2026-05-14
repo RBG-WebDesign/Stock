@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime
 from typing import List, Optional, Annotated
+from pathlib import Path
 
 import typer
 import questionary
@@ -20,6 +21,7 @@ from tqa.charting.builder import ChartBuilder
 from tqa.llm.orchestrator import AnalysisOrchestrator
 from tqa.utils.session_logger import init_session
 from tqa.utils.report_builder import generate_pdf_report
+from tqa.utils.config_loader import load_config_file, FullConfig
 
 # Initialize Rich Console and Typer
 console = Console()
@@ -45,12 +47,12 @@ app = typer.Typer(
 
 def print_banner():
     art = (
-        "   [bold cyan]████████╗ ██████╗  █████╗ [/bold cyan]\n"
-        "   [bold cyan]   ██╔══╝██╔═══██╗██╔══██╗[/bold cyan]\n"
-        "   [bold cyan]   ██║   ██║   ██║███████║[/bold cyan]\n"
-        "   [bold cyan]   ██║   ██║▄▄ ██║██╔══██║[/bold cyan]\n"
-        "   [bold cyan]   ██║    ╚██████╔╝██║  ██║[/bold cyan]\n"
-        "   [dim cyan]   ╚═╝     ╚══▀▀═╝ ╚═╝  ╚═╝[/dim cyan]\n"
+        "   [bold cyan]████████╗ ██████╗    █████╗ [/bold cyan]\n"
+        "   [bold cyan]   ██╔══╝██╔═══██╗  ██╔══██╗[/bold cyan]\n"
+        "   [bold cyan]   ██║   ██║   ██║  ███████║[/bold cyan]\n"
+        "   [bold cyan]   ██║   ██║▄▄ ██║  ██╔══██║[/bold cyan]\n"
+        "   [bold cyan]   ██║     ╚████╔╝  ██║  ██║[/bold cyan]\n"
+        "   [dim cyan]    ╚═╝      ╚═▀═╝   ╚═╝  ╚═╝[/dim cyan]\n"
     )
     meta = (
         "   [bold white]TECHNO-QUANTAMENTAL ANALYZER[/bold white]     [dim cyan]v0.1[/dim cyan]\n"
@@ -80,7 +82,8 @@ async def run_pipeline(
     max_recent_articles: int = settings.MAX_RECENT_ARTICLES,
     save_prompts: bool = False,
     prompt_mode: str = "master_analyst",
-    model: str = settings.DEFAULT_MODEL
+    model: str = settings.DEFAULT_MODEL,
+    technical_filters: Optional[List[str]] = None
 ):
     """
     The actual orchestration logic.
@@ -102,6 +105,7 @@ async def run_pipeline(
         "save_prompts": save_prompts,
         "model": model,
         "prompt_mode": prompt_mode,
+        "technical_filters": technical_filters,
         "timestamp": datetime.now().isoformat()
     })
     
@@ -176,7 +180,8 @@ async def run_pipeline(
                 max_rev_growth=max_rev_growth,
                 min_prev_eps=min_prev_eps,
                 max_prev_eps=max_prev_eps,
-                min_latest_eps=min_latest_eps
+                min_latest_eps=min_latest_eps,
+                technical_filters=technical_filters
             )
             passed_fund = []
             
@@ -256,14 +261,16 @@ async def run_pipeline(
                     client.fetch_historical_ratings(ticker),
                     client.fetch_financial_scores(ticker),
                     client.fetch_price_target_summary(ticker),
-                    client.fetch_stock_news(ticker, limit=max_recent_articles)
+                    client.fetch_stock_news(ticker, limit=max_recent_articles),
+                    client.fetch_company_profile(ticker)
                 )
                 d.update({
                     "key_metrics": res[0], "ratios": res[1], "share_float": res[2],
                     "stock_price_change": res[3], "earnings_surprises": res[4],
                     "stock_grades": res[5], "historical_grades": res[6],
                     "historical_ratings": res[7], "financial_scores": res[8],
-                    "price_target_summary": res[9], "news": res[10]
+                    "price_target_summary": res[9], "news": res[10],
+                    "profile": res[11]
                 })
                 progress.advance(task_id)
                 return d
@@ -306,7 +313,8 @@ async def run_pipeline(
                 save_prompts=save_prompts,
                 model=model,
                 prompt_mode=prompt_mode,
-                summary_max_chars=news_summary_max_chars
+                summary_max_chars=news_summary_max_chars,
+                max_articles=max_recent_articles
             )
             progress.remove_task(p4_task)
             session.update_funnel_stats(final_watchlist_count=len(passed_tickers))
@@ -327,6 +335,7 @@ async def run_pipeline(
         "save_prompts": save_prompts,
         "model": model,
         "prompt_mode": prompt_mode,
+        "technical_filters": technical_filters,
         "timestamp": datetime.now().isoformat()
     })
 
@@ -397,59 +406,128 @@ def scan(
     news_summary_max_chars: Annotated[Optional[int], typer.Option("--news-summary-max-chars", help="Maximum characters for news article summaries.")] = None,
     max_recent_articles: Annotated[Optional[int], typer.Option("--max-recent-articles", help="Number of recent news articles to include in LLM payload.")] = None,
     save_prompts: Annotated[bool, typer.Option("--save-prompts", "-s", help="Save all LLM prompts and responses for debugging.")] = False,
-    prompt_mode: Annotated[str, typer.Option("--prompt-mode", "-p", help="Prompt mode to use for analysis.")] = settings.DEFAULT_PROMPT_KEY,
-    model: Annotated[str, typer.Option("--model", "-m", help="LLM model to use.")] = settings.DEFAULT_MODEL
+    prompt_mode: Annotated[Optional[str], typer.Option("--prompt-mode", "-p", help="Prompt mode to use for analysis.")] = None,
+    model: Annotated[Optional[str], typer.Option("--model", "-m", help="LLM model to use.")] = None,
+    config_path: Annotated[Optional[Path], typer.Option("--config", "-c", help="Path to a JSON configuration file.")] = None
 ):
     """Run the end-to-end Quantamental scan."""
-    # Interactive prompts if arguments are missing
-    if universe_limit is None:
-        universe_limit = IntPrompt.ask("[bold cyan]How many tickers should we pull from the FMP universe?[/bold cyan]", default=50)
+    # 1. Load config if provided
+    config = FullConfig()
+    if config_path:
+        try:
+            config = load_config_file(config_path)
+            console.print(f"[bold green]✓[/bold green] Loaded configuration from [yellow]{config_path}[/yellow]")
+        except Exception as e:
+            console.print(f"[bold red]Error loading config:[/bold red] {e}")
+            raise typer.Exit(1)
+
+
+    # 2. Resolve Values with Priority: CLI -> Config -> Prompts/Defaults
     
+    # Interactivity control: Skip prompts if config is provided or any explicit CLI args are provided
+    cli_args_provided = any([
+        universe_limit is not None,
+        min_eps_growth is not None,
+        min_rev_growth is not None,
+        max_rev_growth is not None,
+        min_prev_eps is not None,
+        max_prev_eps is not None,
+        min_latest_eps is not None,
+        min_market_cap_m is not None,
+        max_market_cap_m is not None,
+        news_summary_max_chars is not None,
+        max_recent_articles is not None,
+        prompt_mode is not None,
+        model is not None,
+        save_prompts is True # Since default is False
+    ])
+    skip_prompts = config_path is not None or cli_args_provided
+
+    # --- Pipeline Settings ---
+    if universe_limit is None:
+        universe_limit = config.pipeline.universe_limit
+        if universe_limit is None and not skip_prompts:
+            universe_limit = IntPrompt.ask("[bold cyan]How many tickers should we pull from the FMP universe?[/bold cyan]", default=50)
+        elif universe_limit is None:
+            universe_limit = 50
+
+    if model is None:
+        model = config.pipeline.model or settings.DEFAULT_MODEL
+    
+    if prompt_mode is None:
+        prompt_mode = config.pipeline.prompt_mode or settings.DEFAULT_PROMPT_KEY
+
+    if news_summary_max_chars is None:
+        news_summary_max_chars = config.pipeline.news_summary_max_chars or settings.NEWS_SUMMARY_MAX_CHARS
+    
+    if max_recent_articles is None:
+        max_recent_articles = config.pipeline.max_recent_articles or settings.MAX_RECENT_ARTICLES
+
+    # Save Prompts: CLI flag takes precedence if True, otherwise check config
+    if not save_prompts:
+        save_prompts = config.pipeline.save_prompts
+
+    # --- Fundamental & Market Cap Filters ---
     if min_eps_growth is None:
-        min_eps_growth = FloatPrompt.ask("[bold cyan]Enter minimum EPS growth threshold (%) [/bold cyan]", default=settings.DEFAULT_MIN_EPS_GROWTH)
+        min_eps_growth = config.fundamental_filters.min_eps_growth
+        if min_eps_growth is None and not skip_prompts:
+            min_eps_growth = FloatPrompt.ask("[bold cyan]Enter minimum EPS growth threshold (%) [/bold cyan]", default=settings.DEFAULT_MIN_EPS_GROWTH)
+        elif min_eps_growth is None:
+            min_eps_growth = settings.DEFAULT_MIN_EPS_GROWTH
 
-    # Defaults for internal values
     if min_rev_growth is None:
-        min_rev_growth = settings.DEFAULT_MIN_REV_GROWTH
+        min_rev_growth = config.fundamental_filters.min_rev_growth
 
-    # Advanced Mode toggle
-    advanced = questionary.confirm("Enter advanced settings mode?", default=False).ask()
-    if advanced:
-        model = questionary.select(
-            "Select LLM Model",
-            choices=settings.MODEL_LIST,
-            default=model
-        ).ask()
-        
-        prompt_mode = questionary.select(
-            "Select Prompt Mode",
-            choices=["master_analyst", "institutional_accumulator", "can_slim_growth", "price_action_entry"],
-            default=prompt_mode
-        ).ask()
-        
-        save_prompts = questionary.confirm("Save raw prompts for debug?", default=save_prompts).ask()
+    if max_rev_growth is None:
+        max_rev_growth = config.fundamental_filters.max_rev_growth
 
-        # News & Summary Settings
-        console.print("\n[bold yellow]LLM Context Settings[/bold yellow]")
-        news_summary_max_chars = IntPrompt.ask("News summary max characters", default=news_summary_max_chars or settings.NEWS_SUMMARY_MAX_CHARS)
-        max_recent_articles = IntPrompt.ask("Max news articles to fetch", default=max_recent_articles or settings.MAX_RECENT_ARTICLES)
+    if min_prev_eps is None:
+        min_prev_eps = config.fundamental_filters.min_prev_eps
 
-        # New Fundamental & Market Cap Filters
-        console.print("\n[bold yellow]Advanced Fundamental Filters[/bold yellow]")
-        
-        if min_rev_growth is None or advanced:
-            res = FloatPrompt.ask("Minimum YoY Revenue growth %", default=min_rev_growth or settings.DEFAULT_MIN_REV_GROWTH)
-            min_rev_growth = float(res)
+    if max_prev_eps is None:
+        max_prev_eps = config.fundamental_filters.max_prev_eps
 
-        max_rev_growth_val = FloatPrompt.ask("Maximum YoY Revenue growth % (0 for None)", default=max_rev_growth or 0.0)
-        max_rev_growth = float(max_rev_growth_val) if max_rev_growth_val != 0 else None
+    if min_latest_eps is None:
+        min_latest_eps = config.fundamental_filters.min_latest_eps
 
-        max_prev_eps_val = FloatPrompt.ask("Maximum Prev Quarter EPS (e.g. 0 for turn profitable, 999 for None)", default=max_prev_eps or 999.0)
-        max_prev_eps = float(max_prev_eps_val) if max_prev_eps_val != 999.0 else None
+    if min_market_cap_m is None:
+        min_market_cap_m = config.market_cap.min_m
 
-        console.print("\n[bold yellow]Universe Scale Filters[/bold yellow]")
-        min_market_cap_m = FloatPrompt.ask("Minimum Market Cap ($ Millions)", default=min_market_cap_m or (settings.DEFAULT_MIN_MARKET_CAP / 1_000_000))
-        max_market_cap_m = FloatPrompt.ask("Maximum Market Cap ($ Millions)", default=max_market_cap_m or (settings.DEFAULT_MAX_MARKET_CAP / 1_000_000))
+    if max_market_cap_m is None:
+        max_market_cap_m = config.market_cap.max_m
+
+    # 3. Interactive Advanced Mode (only if no config and not fully automated)
+    # --- Technical Filters ---
+    technical_filters = config.technical_filters
+
+    if not skip_prompts:
+        advanced = questionary.confirm("Enter advanced settings mode?", default=False).ask()
+        if advanced:
+            model = questionary.select("Select LLM Model", choices=settings.MODEL_LIST, default=model).ask()
+            prompt_mode = questionary.select(
+                "Select Prompt Mode",
+                choices=["master_analyst", "institutional_accumulator", "can_slim_growth", "price_action_entry"],
+                default=prompt_mode
+            ).ask()
+            save_prompts = questionary.confirm("Save raw prompts for debug?", default=save_prompts).ask()
+
+            # News & Summary Settings
+            console.print("\n[bold yellow]LLM Context Settings[/bold yellow]")
+            news_summary_max_chars = IntPrompt.ask("News summary max characters", default=news_summary_max_chars)
+            max_recent_articles = IntPrompt.ask("Max news articles to fetch", default=max_recent_articles)
+
+            # New Fundamental & Market Cap Filters
+            console.print("\n[bold yellow]Advanced Fundamental Filters[/bold yellow]")
+            min_rev_growth = FloatPrompt.ask("Minimum YoY Revenue growth %", default=min_rev_growth)
+            max_rev_growth_val = FloatPrompt.ask("Maximum YoY Revenue growth % (0 for None)", default=max_rev_growth or 0.0)
+            max_rev_growth = float(max_rev_growth_val) if max_rev_growth_val != 0 else None
+
+            max_prev_eps_val = FloatPrompt.ask("Maximum Prev Quarter EPS (e.g. 0 for turn profitable, 999 for None)", default=max_prev_eps or 999.0)
+            max_prev_eps = float(max_prev_eps_val) if max_prev_eps_val != 999.0 else None
+
+            console.print("\n[bold yellow]Universe Scale Filters[/bold yellow]")
+            min_market_cap_m = FloatPrompt.ask("Minimum Market Cap ($ Millions)", default=min_market_cap_m)
+            max_market_cap_m = FloatPrompt.ask("Maximum Market Cap ($ Millions)", default=max_market_cap_m)
 
     console.print(f"\n[bold green]▶ Launching Pipeline...[/bold green]")
     console.print(f"Settings: [yellow]Model={model}[/yellow] | [yellow]Prompt Mode={prompt_mode}[/yellow] | [yellow]Date={datetime.now().strftime('%Y-%m-%d')}[/yellow]\n")
@@ -459,12 +537,6 @@ def scan(
         min_market_cap = int(min_market_cap_m * 1_000_000) if min_market_cap_m is not None else None
         max_market_cap = int(max_market_cap_m * 1_000_000) if max_market_cap_m is not None else None
         
-        # News defaults if not provided by flags or advanced mode
-        if news_summary_max_chars is None:
-            news_summary_max_chars = settings.NEWS_SUMMARY_MAX_CHARS
-        if max_recent_articles is None:
-            max_recent_articles = settings.MAX_RECENT_ARTICLES
-
         session_id = asyncio.run(run_pipeline(
             universe_limit,
             min_eps_growth,
@@ -479,7 +551,8 @@ def scan(
             max_recent_articles=max_recent_articles,
             save_prompts=save_prompts,
             prompt_mode=prompt_mode,
-            model=model
+            model=model,
+            technical_filters=technical_filters
         ))
 
         if session_id:
