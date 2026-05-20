@@ -147,7 +147,7 @@ async def run_pipeline(
                 # Bulk fetching logic (Premium only)
                 p1_bulk_task = progress.add_task("[yellow]Phase 1: Bulk Fundamental Fetch...", total=4)
                 
-                def get_recent_quarters(n=4):
+                def get_recent_quarters(n=8):
                     now = datetime.now()
                     results = []
                     curr_year = now.year
@@ -160,7 +160,7 @@ async def run_pipeline(
                         results.append((curr_year, f"Q{curr_q}"))
                     return results
 
-                quarters = get_recent_quarters(4)
+                quarters = get_recent_quarters(8)
                 for year, q in quarters:
                     quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True, exchanges=exchanges)
                     if quarter_data:
@@ -171,7 +171,7 @@ async def run_pipeline(
                                 if symbol not in ticker_statements:
                                     ticker_statements[symbol] = []
                                 ticker_statements[symbol].append(statement)
-                    progress.advance(p1_bulk_task)
+                    progress.advance(p1_bulk_task, 4 / 8) # Total 4 steps, now we do 8, so each is 0.5
                 
                 # Sort statements by date
                 for symbol in ticker_statements:
@@ -301,6 +301,7 @@ async def run_pipeline(
                     "share_float": client.fetch_share_float(ticker),
                     "stock_price_change": client.fetch_stock_price_change(ticker),
                     "earnings_surprises": client.fetch_earnings_surprises(ticker),
+                    "analyst_estimates": client.fetch_analyst_estimates(ticker),
                     "stock_grades": client.fetch_stock_grades(ticker),
                     "historical_grades": client.fetch_historical_stock_grades(ticker),
                     "historical_ratings": client.fetch_historical_ratings(ticker),
@@ -344,6 +345,7 @@ async def run_pipeline(
                     "share_float": res.get("share_float"),
                     "stock_price_change": res.get("stock_price_change"),
                     "earnings_surprises": res.get("earnings_surprises"),
+                    "analyst_estimates": res.get("analyst_estimates"),
                     "stock_grades": res.get("stock_grades"),
                     "historical_grades": res.get("historical_grades"),
                     "historical_ratings": res.get("historical_ratings"),

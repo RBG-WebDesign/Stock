@@ -9,13 +9,36 @@ from config.settings import settings
 from tqa.utils.data_formatter import format_large_number, format_currency
 
 class PDFGenerator(FPDF):
-    def __init__(self):
+    def __init__(self, compact: bool = False):
         super().__init__()
+        self.compact = compact
         self.theme_primary = (46, 80, 119)  # Dark Blue #2E5077
         self.theme_success = (76, 175, 80)  # Green #4CAF50
         self.theme_danger = (244, 67, 54)   # Red #F44336
         self.theme_text = (50, 50, 50)
         self.theme_light_grey = (245, 245, 245)
+        
+        # Spacing configurations (Compact vs Roomy)
+        self.spacing = {
+            'chapter_h': 8 if compact else 10,
+            'chapter_ln': 3 if compact else 5,
+            'param_h': 8 if compact else 10,
+            'param_ln_top': 4 if compact else 5,
+            'param_row_h': 6 if compact else 7,
+            'param_ln_bottom': 6 if compact else 10,
+            'funnel_h': 9 if compact else 10,
+            'funnel_ln': 6 if compact else 10,
+            'ticker_font': 26 if compact else 28,
+            'ticker_h': 12 if compact else 15,
+            'ticker_nudge': 2 if compact else 4,
+            'ticker_ln': 10 if compact else 15,
+            'overview_h': 6 if compact else 8,
+            'desc_ln': 3 if compact else 5,
+            'metric_h': 14 if compact else 15,
+            'metric_ln': 4 if compact else 5,
+            'section_ln': 1 if compact else 4,
+            'inline_ln': 0.5 if compact else 1.5
+        }
         
         # Load Local Unicode Fonts (Inter)
         font_dir = Path("fonts")
@@ -116,17 +139,17 @@ class PDFGenerator(FPDF):
     def chapter_title(self, label: str):
         self.set_font(self.default_font, "B", 14)
         self.set_text_color(*self.theme_primary)
-        self.cell(0, 8, label, ln=True)  # Reduced from 10 → 8
+        self.cell(0, self.spacing['chapter_h'], label, ln=True)
         self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
-        self.ln(3)  # Reduced from 5 → 3
+        self.ln(self.spacing['chapter_ln'])
         self.set_text_color(*self.theme_text)
 
     def draw_parameter_grid(self, config: Dict[str, Any]):
         self.set_font(self.default_font, "B", 11)
         self.set_text_color(*self.theme_primary)
-        self.cell(0, 8, "Run Configuration Parameters", ln=True)  # Reduced from 10 → 8
+        self.cell(0, self.spacing['param_h'], "Run Configuration Parameters", ln=True)
         self.line(self.l_margin, self.get_y(), 210 - self.r_margin, self.get_y())
-        self.ln(4)  # Reduced from 5 → 4
+        self.ln(self.spacing['param_ln_top'])
         
         self.set_font(self.default_font, "", 9)
         self.set_text_color(*self.theme_text)
@@ -179,30 +202,30 @@ class PDFGenerator(FPDF):
         for i in range(0, len(params), 2):
             p1 = params[i]
             self.set_font(self.default_font, "B", 9)
-            self.cell(35, 6, f"{p1[0]}:")  # Reduced row height from 7 → 6
+            self.cell(35, self.spacing['param_row_h'], f"{p1[0]}:")
             self.set_font(self.default_font, "", 9)
-            self.cell(col_w - 35, 6, p1[1])
+            self.cell(col_w - 35, self.spacing['param_row_h'], p1[1])
             
             if i + 1 < len(params):
                 p2 = params[i + 1]
                 self.set_font(self.default_font, "B", 9)
-                self.cell(35, 6, f"{p2[0]}:")
+                self.cell(35, self.spacing['param_row_h'], f"{p2[0]}:")
                 self.set_font(self.default_font, "", 9)
-                self.cell(col_w - 35, 6, p2[1], ln=True)
+                self.cell(col_w - 35, self.spacing['param_row_h'], p2[1], ln=True)
             else:
-                self.ln(6)
+                self.ln(self.spacing['param_row_h'])
 
         # Technical Filters
         tech = config.get("technical_filters")
         if tech:
-            self.ln(3)  # Reduced from 5 → 3
+            self.ln(self.spacing['chapter_ln'])
             self.set_font(self.default_font, "B", 9)
             self.cell(0, 6, "Technical Filters:", ln=True)
             self.set_font(self.default_font, "", 8)
             filter_text = ", ".join(tech)
             self.multi_cell(0, 4, filter_text)
         
-        self.ln(6)  # Reduced from 10 → 6
+        self.ln(self.spacing['param_ln_bottom'])
 
     def funnel_infographic(self, stats: Dict[str, int]):
         self.chapter_title("Pipeline Filtering Funnel")
@@ -224,20 +247,49 @@ class PDFGenerator(FPDF):
         self.set_font(self.default_font, "B", 10)
         self.set_fill_color(*self.theme_primary)
         self.set_text_color(255, 255, 255)
-        self.cell(80, 9, " Stage", 1, 0, 'L', True)   # Reduced from 10 → 9
-        self.cell(40, 9, " Count", 1, 0, 'C', True)
-        self.cell(40, 9, " Retention", 1, 1, 'C', True)
+        self.cell(80, self.spacing['funnel_h'], " Stage", 1, 0, 'L', True)
+        self.cell(40, self.spacing['funnel_h'], " Count", 1, 0, 'C', True)
+        self.cell(40, self.spacing['funnel_h'], " Retention", 1, 1, 'C', True)
         
         self.set_font(self.default_font, "", 10)
         self.set_text_color(*self.theme_text)
         for i, (label, count, pct) in enumerate(cols):
             fill = (i % 2 == 1)
             if fill: self.set_fill_color(*self.theme_light_grey)
-            self.cell(80, 9, f" {label}", 1, 0, 'L', fill)
-            self.cell(40, 9, count, 1, 0, 'C', fill)
-            self.cell(40, 9, pct, 1, 1, 'C', fill)
+            self.cell(80, self.spacing['funnel_h'], f" {label}", 1, 0, 'L', fill)
+            self.cell(40, self.spacing['funnel_h'], count, 1, 0, 'C', fill)
+            self.cell(40, self.spacing['funnel_h'], pct, 1, 1, 'C', fill)
         
-        self.ln(6)  # Reduced from 10 → 6
+        self.ln(self.spacing['funnel_ln'])
+
+    def write_section(self, title: str, text: str, color=None):
+        epw = self.epw
+        self.set_font(self.default_font, "B", 10)
+        if color:
+            self.set_text_color(*color)
+        else:
+            self.set_text_color(*self.theme_primary)
+        self.cell(0, 4, title, ln=True)
+        self.line(self.get_x(), self.get_y(), self.get_x() + epw, self.get_y())
+        self.ln(0.5)
+        
+        self.set_font(self.default_font, "", 9)
+        self.set_text_color(*self.theme_text)
+        self.multi_cell(epw, 4, str(text))
+        self.ln(self.spacing['section_ln'])
+
+    def write_inline_section(self, title: str, text: str, color=None):
+        self.set_font(self.default_font, "B", 9)
+        if color:
+            self.set_text_color(*color)
+        else:
+            self.set_text_color(*self.theme_primary)
+        
+        self.write(4, f"{title}: ")
+        self.set_font(self.default_font, "", 9)
+        self.set_text_color(*self.theme_text)
+        self.write(4, f"{str(text)}\n")
+        self.ln(self.spacing['inline_ln'])
 
     def rounded_rect(self, x, y, w, h, r, style=''):
         k = self.k
@@ -266,7 +318,7 @@ class PDFGenerator(FPDF):
         h = self.h
         self._out(f'{x1 * self.k:.2f} {(h - y1) * self.k:.2f} {x2 * self.k:.2f} {(h - y2) * self.k:.2f} {x3 * self.k:.2f} {(h - y3) * self.k:.2f} c')
 
-def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
+def generate_pdf_report(session_id: str, min_confidence: float = 0.0, compact: Optional[bool] = None):
     session_dir = settings.REPORTS_DIR / "runs" / session_id
     config_path = session_dir / "run_config.json"
     prompts_path = session_dir / "prompts_debug.jsonl"
@@ -277,6 +329,11 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
     with open(config_path, "r") as f:
         config = json.load(f)
     
+    # Auto-detect compact mode if not explicitly provided
+    if compact is None:
+        prompt_mode = config.get("pipeline", {}).get("prompt_mode", "")
+        compact = "can_slim" in prompt_mode.lower()
+
     stock_analyses = []
     if prompts_path.exists():
         with open(prompts_path, "r") as f:
@@ -297,7 +354,7 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
 
     final_stocks.sort(key=lambda x: x.get("response", {}).get("confidence_score", 0), reverse=True)
 
-    pdf = PDFGenerator()
+    pdf = PDFGenerator(compact=compact)
     pdf.alias_nb_pages()
     pdf.add_page()
     
@@ -313,20 +370,20 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
         pdf.add_page()
         
         # --- Ticker + Confidence badge row ---
-        pdf.set_font(pdf.default_font, "B", 26)  # Slightly reduced from 28
+        pdf.set_font(pdf.default_font, "B", pdf.spacing['ticker_font'])
         pdf.set_text_color(*pdf.theme_primary)
-        pdf.cell(80, 12, ticker)  # Reduced height from 15 → 12
+        pdf.cell(80, pdf.spacing['ticker_h'], ticker)
 
-        pdf.set_y(pdf.get_y() + 2)  # Reduced nudge from 4 → 2
+        pdf.set_y(pdf.get_y() + pdf.spacing['ticker_nudge'])
         pdf.set_x(120)
         pdf.draw_badge(f"CONFIDENCE: {conf}/10", conf)
-        pdf.ln(10)  # Reduced from 15 → 10
+        pdf.ln(pdf.spacing['ticker_ln'])
 
         # --- Company Profile Section ---
         if profile:
             pdf.set_font(pdf.default_font, "B", 10)
             pdf.set_text_color(*pdf.theme_primary)
-            pdf.cell(0, 6, "Company Overview", ln=True)  # Reduced from 8 → 6
+            pdf.cell(0, pdf.spacing['overview_h'], "Company Overview", ln=True)
             pdf.set_font(pdf.default_font, "", 9)
             pdf.set_text_color(*pdf.theme_text)
             
@@ -360,14 +417,14 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
                     desc = desc[:500] + "..."
                 pdf.set_font(pdf.default_font, "", 8) # No italics, smaller font
                 pdf.multi_cell(0, 4, desc)
-            pdf.ln(3)  # Reduced from 5 → 3
+            pdf.ln(pdf.spacing['desc_ln'])
         
         pdf.set_text_color(*pdf.theme_text)
 
         # --- Metric boxes ---
         y_metrics = pdf.get_y()
-        box_w = 46   # Slightly narrower (was 48)
-        box_h = 14   # Reduced from 15 → 14
+        box_w = 46
+        box_h = pdf.spacing['metric_h']
         spacing = 2
 
         currency = profile.get('currency', 'USD')
@@ -391,40 +448,9 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
         pdf.set_xy(pdf.get_x() + spacing, y_metrics)
         pdf.draw_metric_box("Reward/Risk", rr_val, w=box_w, h=box_h)
 
-        pdf.set_y(y_metrics + box_h + 4)  # Reduced trailing gap from 5 → 4
+        pdf.set_y(y_metrics + box_h + pdf.spacing['metric_ln'])
 
         epw = pdf.epw
-
-        # --- Section writer (Large Block) ---
-        def write_section(title, text, color=None):
-            pdf.set_font(pdf.default_font, "B", 10)
-            if color:
-                pdf.set_text_color(*color)
-            else:
-                pdf.set_text_color(*pdf.theme_primary)
-            pdf.cell(0, 4, title, ln=True)
-            pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + epw, pdf.get_y())
-            pdf.ln(0.5)
-            
-            pdf.set_font(pdf.default_font, "", 9)
-            pdf.set_text_color(*pdf.theme_text)
-            pdf.multi_cell(epw, 4, str(text))
-            pdf.ln(1)
-
-        # --- Inline Section writer (Compact) ---
-        def write_inline_section(title, text, color=None):
-            pdf.set_font(pdf.default_font, "B", 9)
-            if color:
-                pdf.set_text_color(*color)
-            else:
-                pdf.set_text_color(*pdf.theme_primary)
-            
-            # Write label and then text inline with minimal trailing space
-            pdf.write(4, f"{title}: ")
-            pdf.set_font(pdf.default_font, "", 9)
-            pdf.set_text_color(*pdf.theme_text)
-            pdf.write(4, f"{str(text)}\n")
-            pdf.ln(0.5)
 
         # Define fields to exclude from dynamic section rendering (already shown in header/metrics)
         exclude_fields = {
@@ -469,7 +495,7 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
                 
                 pdf.set_font(pdf.default_font, "", 9)
                 lines = pdf.multi_cell(epw - 4, 4, str(field_value), split_only=True)
-                h = (len(lines) * 4)
+                h = (len(lines) * 4) + 4 # some padding
                 
                 if curr_y + h > 250:
                     pdf.add_page()
@@ -477,7 +503,7 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
                 
                 pdf.rect(pdf.l_margin, curr_y, epw, h, 'F')
                 pdf.set_xy(pdf.l_margin, curr_y + 1)
-                write_section(title, field_value, color=section_color)
+                pdf.write_section(title, field_value, color=section_color)
                 pdf.set_y(curr_y + h + 2)
             else:
                 # Optimized color logic to avoid accidental green on pillars
@@ -485,9 +511,9 @@ def generate_pdf_report(session_id: str, min_confidence: float = 0.0):
                     section_color = pdf.theme_success
                 
                 if field_name in compact_fields:
-                    write_inline_section(title, field_value, color=section_color)
+                    pdf.write_inline_section(title, field_value, color=section_color)
                 else:
-                    write_section(title, field_value, color=section_color)
+                    pdf.write_section(title, field_value, color=section_color)
 
         # --- Charts ---
         chart_dir = Path("data/charts")

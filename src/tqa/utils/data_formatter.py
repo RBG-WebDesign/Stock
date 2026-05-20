@@ -190,29 +190,38 @@ def format_large_number(val: Any) -> Any:
     return val
 
 def _calculate_growth_metrics(income_statements: List[Dict[str, Any]]) -> Dict[str, Any]:
-    if not income_statements or len(income_statements) < 5:
-        return {"error": "Insufficient data for growth calculation"}
+    if not income_statements:
+        return {"error": "No income statements available"}
     
     # FMP: Newest to Oldest
     latest = income_statements[0]
-    prev_q = income_statements[1]
-    year_ago_q = income_statements[4]
-    
     metrics = {}
     
-    # Q/Q Growth
-    if latest.get("eps") and prev_q.get("eps") and prev_q["eps"] != 0:
-        metrics["eps_growth_qq_pct"] = round(((latest["eps"] - prev_q["eps"]) / abs(prev_q["eps"])) * 100, 2)
-    
-    if latest.get("revenue") and prev_q.get("revenue") and prev_q["revenue"] != 0:
-        metrics["revenue_growth_qq_pct"] = round(((latest["revenue"] - prev_q["revenue"]) / prev_q["revenue"]) * 100, 2)
+    # Q/Q Growth (compare latest with previous available entry, usually 1 quarter ago)
+    if len(income_statements) >= 2:
+        prev_q = income_statements[1]
+        if latest.get("eps") is not None and prev_q.get("eps") is not None and prev_q["eps"] != 0:
+            metrics["eps_growth_qq_pct"] = round(((latest["eps"] - prev_q["eps"]) / abs(prev_q["eps"])) * 100, 2)
         
-    # Y/Y Growth
-    if latest.get("eps") and year_ago_q.get("eps") and year_ago_q["eps"] != 0:
-        metrics["eps_growth_yy_pct"] = round(((latest["eps"] - year_ago_q["eps"]) / abs(year_ago_q["eps"])) * 100, 2)
+        if latest.get("revenue") and prev_q.get("revenue") and prev_q["revenue"] != 0:
+            metrics["revenue_growth_qq_pct"] = round(((latest["revenue"] - prev_q["revenue"]) / prev_q["revenue"]) * 100, 2)
     
-    if latest.get("revenue") and year_ago_q.get("revenue") and year_ago_q["revenue"] != 0:
-        metrics["revenue_growth_yy_pct"] = round(((latest["revenue"] - year_ago_q["revenue"]) / year_ago_q["revenue"]) * 100, 2)
+    # Y/Y Growth (specifically look for quarter with same period but previous year)
+    latest_period = latest.get("period")
+    latest_year = latest.get("fiscalYear")
+    
+    if latest_period and latest_year:
+        year_ago_q = next((s for s in income_statements if s.get("period") == latest_period and s.get("fiscalYear") == latest_year - 1), None)
+        
+        if year_ago_q:
+            if latest.get("eps") is not None and year_ago_q.get("eps") is not None and year_ago_q["eps"] != 0:
+                metrics["eps_growth_yy_pct"] = round(((latest["eps"] - year_ago_q["eps"]) / abs(year_ago_q["eps"])) * 100, 2)
+            
+            if latest.get("revenue") and year_ago_q.get("revenue") and year_ago_q["revenue"] != 0:
+                metrics["revenue_growth_yy_pct"] = round(((latest["revenue"] - year_ago_q["revenue"]) / year_ago_q["revenue"]) * 100, 2)
+                
+    if not metrics:
+        return {"error": "Insufficient data for growth calculation"}
             
     return metrics
 

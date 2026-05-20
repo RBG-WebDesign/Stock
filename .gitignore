@@ -80,3 +80,6 @@ htmlcov/
 
 
 *.png
+
+
+notebooks/fmp-full-download/data
