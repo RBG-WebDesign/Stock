@@ -5,15 +5,16 @@
     "prompt_mode": "institutional_accumulator",
     "save_prompts": false,
     "exchanges": "NYSE,NASDAQ,AMEX",
+    "country": "US",
     "news_summary_max_chars": 1000,
     "max_recent_articles": 20
   },
   "market_cap": {
-    "min_m": 50,
+    "min_m": 500,
     "max_m": 50000
   },
   "fundamental_filters": {
-    "min_eps_growth": 5.0,
+    "min_eps_growth": 10.0,
     "min_rev_growth": 10.0,
     "max_rev_growth": null,
     "min_prev_eps": null,

@@ -5,11 +5,12 @@
     "prompt_mode": "master_analyst",
     "save_prompts": false,
     "exchanges": "NYSE,NASDAQ,AMEX",
+    "country": "US",
     "news_summary_max_chars": 1000,
     "max_recent_articles": 20
   },
   "market_cap": {
-    "min_m": 50,
+    "min_m": 500,
     "max_m": 50000
   },
   "fundamental_filters": {

@@ -4,6 +4,8 @@
     "model": "google/gemini-3-flash-preview",
     "prompt_mode": "can_slim_growth",
     "save_prompts": false,
+    "exchanges": null,
+    "country": "US",
     "news_summary_max_chars": 500,
     "max_recent_articles": 10
   },
@@ -12,8 +14,8 @@
     "max_m": 50000
   },
   "fundamental_filters": {
-    "min_eps_growth": 5.0,
-    "min_rev_growth": 5.0,
+    "min_eps_growth": 10.0,
+    "min_rev_growth": 10.0,
     "max_rev_growth": null,
     "min_prev_eps": null,
     "max_prev_eps": null,

@@ -23,7 +23,7 @@
 * [ ] Enhance reporting with comprehensive run configurations and company profile data (Industry, CEO, Operations).
 * [-] Implement native `.jsonl` batch payloads for OpenAI/Anthropic (currently uses parallel sync calls via OpenRouter).
 * [ ] Implement the batch submission, polling, and retrieval logic within `src/tqa/llm/`.
-* [ ] Set up daily execution triggers (e.g., cron job or GitHub Actions) to run automatically at 5:00 PM EST.
+* [x] Set up daily execution triggers (cron job) to run automatically at 5:00 PM local time.
 
 ## Phase 3: Advanced Signals & Execution (Future)
 * [ ] Implement Relative Strength (RS) filter comparing ticker performance against S&P 500 (SPY).

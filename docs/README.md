@@ -88,6 +88,10 @@ uv run generate_report.py --date 2026-05-12
 
 ```
 
+### Automation
+The system is configured for nightly automation via cron at 5:00 PM.
+The main entry point for automation is [`scripts/nightly_scan.sh`](scripts/nightly_scan.sh).
+
 ## 📂 Project Structure
 
 * `config/`: Prompts, Pydantic schemas, and global settings.

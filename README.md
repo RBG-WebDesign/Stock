@@ -96,6 +96,23 @@ uv run main.py report <session_id>
 
 ### CLI Options for `scan`
 * `--config`, `-c`: Path to a JSON configuration file.
+
+## 🤖 Automation
+
+TQA includes a nightly automation script to run multiple scanning configurations sequentially.
+
+### Nightly Scans
+The script [`scripts/nightly_scan.sh`](scripts/nightly_scan.sh) is configured to run every day at 5:00 PM via cron. It executes scans for:
+- Master Analyst (USA & China)
+- Institutional Accumulator (USA & China)
+- CAN SLIM (USA & China)
+
+Logs for these automated runs are stored in [`logs/cron_scans.log`](logs/cron_scans.log).
+
+To manually trigger the nightly suite:
+```bash
+./scripts/nightly_scan.sh
+```
 * `--limit`, `-l`: Max tickers to fetch from the FMP universe.
 * `--min-eps-growth-pct`, `-e`: Minimum YoY EPS growth % threshold.
 * `--min-market-cap`: Minimum market capitalization in Millions.

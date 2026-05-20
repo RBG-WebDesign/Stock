@@ -5,12 +5,13 @@
     "prompt_mode": "master_analyst",
     "save_prompts": false,
     "exchanges": "SHZ,SHH",
-    "news_summary_max_chars": 500,
-    "max_recent_articles": 10
+    "country": "CN",
+    "news_summary_max_chars": 1000,
+    "max_recent_articles": 20
   },
   "market_cap": {
-    "min_m": 50,
-    "max_m": 5000
+    "min_m": 500,
+    "max_m": 50000
   },
   "fundamental_filters": {
     "min_eps_growth": 5.0,
