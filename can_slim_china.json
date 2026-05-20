@@ -4,17 +4,18 @@
     "model": "google/gemini-3-flash-preview",
     "prompt_mode": "can_slim_growth",
     "save_prompts": false,
-    "exchanges": "SHZ,SHH",
+    "exchanges": null,
+    "country": "CN",
     "news_summary_max_chars": 500,
     "max_recent_articles": 10
   },
   "market_cap": {
-    "min_m": 50,
-    "max_m": 5000
+    "min_m": 500,
+    "max_m": 50000
   },
   "fundamental_filters": {
-    "min_eps_growth": 5.0,
-    "min_rev_growth": 5.0,
+    "min_eps_growth": 10.0,
+    "min_rev_growth": 10.0,
     "max_rev_growth": null,
     "min_prev_eps": null,
     "max_prev_eps": null,

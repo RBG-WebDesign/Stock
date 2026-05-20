@@ -83,6 +83,7 @@ async def run_pipeline(
     max_recent_articles: int = settings.MAX_RECENT_ARTICLES,
     save_prompts: bool = False,
     exchanges: Optional[str] = settings.DEFAULT_EXCHANGES,
+    country: Optional[str] = settings.DEFAULT_COUNTRY,
     prompt_mode: str = "master_analyst",
     model: str = settings.DEFAULT_MODEL,
     technical_filters: Optional[List[str]] = None
@@ -106,6 +107,7 @@ async def run_pipeline(
         "max_recent_articles": max_recent_articles,
         "save_prompts": save_prompts,
         "exchanges": exchanges,
+        "country": country,
         "model": model,
         "prompt_mode": prompt_mode,
         "technical_filters": technical_filters,
@@ -121,7 +123,8 @@ async def run_pipeline(
             fetch_kwargs = {
                 "min_market_cap": min_market_cap if min_market_cap is not None else settings.DEFAULT_MIN_MARKET_CAP,
                 "max_market_cap": max_market_cap if max_market_cap is not None else settings.DEFAULT_MAX_MARKET_CAP,
-                "exchanges": exchanges
+                "exchanges": exchanges,
+                "country": country
             }
                 
             universe = await client.fetch_universe(**fetch_kwargs)
@@ -162,7 +165,7 @@ async def run_pipeline(
 
                 quarters = get_recent_quarters(8)
                 for year, q in quarters:
-                    quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True, exchanges=exchanges)
+                    quarter_data = await client.fetch_income_statement_bulk(year, q, use_csv=True, exchanges=exchanges, country=country)
                     if quarter_data:
                         for statement in quarter_data:
                             symbol = statement.get('symbol')
@@ -265,11 +268,11 @@ async def run_pipeline(
                 
                 # Fetch bulk data concurrently
                 profiles_res, ratings_res, scores_res, targets_res, consensus_res = await asyncio.gather(
-                    client.fetch_profile_bulk(use_csv=True, exchanges=exchanges),
-                    client.fetch_rating_bulk(use_csv=True, exchanges=exchanges),
-                    client.fetch_scores_bulk(use_csv=True, exchanges=exchanges),
-                    client.fetch_price_target_summary_bulk(use_csv=True, exchanges=exchanges),
-                    client.fetch_upgrades_downgrades_consensus_bulk(use_csv=True, exchanges=exchanges)
+                    client.fetch_profile_bulk(use_csv=True, exchanges=exchanges, country=country),
+                    client.fetch_rating_bulk(use_csv=True, exchanges=exchanges, country=country),
+                    client.fetch_scores_bulk(use_csv=True, exchanges=exchanges, country=country),
+                    client.fetch_price_target_summary_bulk(use_csv=True, exchanges=exchanges, country=country),
+                    client.fetch_upgrades_downgrades_consensus_bulk(use_csv=True, exchanges=exchanges, country=country)
                 )
                 
                 # Build lookup maps
@@ -505,6 +508,7 @@ def scan(
     max_recent_articles: Annotated[Optional[int], typer.Option("--max-recent-articles", help="Number of recent news articles to include in LLM payload.")] = None,
     save_prompts: Annotated[bool, typer.Option("--save-prompts", "-s", help="Save all LLM prompts and responses for debugging.")] = False,
     exchanges: Annotated[Optional[str], typer.Option("--exchanges", "-X", help="Comma-separated list of stock exchanges to screen.")] = None,
+    country: Annotated[Optional[str], typer.Option("--country", "-C", help="Comma-separated list of countries to screen (e.g., US,CN,GB).")] = None,
     prompt_mode: Annotated[Optional[str], typer.Option("--prompt-mode", "-p", help="Prompt mode to use for analysis.")] = None,
     model: Annotated[Optional[str], typer.Option("--model", "-m", help="LLM model to use.")] = None,
     config_path: Annotated[Optional[Path], typer.Option("--config", "-c", help="Path to a JSON configuration file.")] = None
@@ -539,6 +543,7 @@ def scan(
         prompt_mode is not None,
         model is not None,
         exchanges is not None,
+        country is not None,
         save_prompts is True # Since default is False
     ])
     skip_prompts = config_path is not None or cli_args_provided
@@ -557,6 +562,10 @@ def scan(
     if exchanges is None:
         # If not provided via CLI, use config (which defaults to settings.DEFAULT_EXCHANGES)
         exchanges = config.pipeline.exchanges
+
+    if country is None:
+        # If not provided via CLI, use config (which defaults to settings.DEFAULT_COUNTRY)
+        country = config.pipeline.country
 
     if prompt_mode is None:
         prompt_mode = config.pipeline.prompt_mode or settings.DEFAULT_PROMPT_KEY
@@ -655,6 +664,7 @@ def scan(
             max_recent_articles=max_recent_articles,
             save_prompts=save_prompts,
             exchanges=exchanges,
+            country=country,
             prompt_mode=prompt_mode,
             model=model,
             technical_filters=technical_filters

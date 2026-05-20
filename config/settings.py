@@ -64,6 +64,10 @@ class Settings(BaseSettings):
         default="NASDAQ,NYSE",
         description="Comma-separated list of stock exchanges to screen (e.g., NASDAQ,NYSE,AMEX,EURONEXT,TSX). Set to null to search all."
     )
+    DEFAULT_COUNTRY: Optional[str] = Field(
+        default=None,
+        description="Comma-separated list of countries to screen (e.g., US,CN,GB). If specified, it usually takes precedence over exchanges in the screener."
+    )
 
     # --- LLM Payload Settings ---
     NEWS_SUMMARY_MAX_CHARS: int = Field(

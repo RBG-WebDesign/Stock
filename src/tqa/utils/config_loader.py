@@ -10,6 +10,7 @@ class PipelineConfig(BaseModel):
     prompt_mode: Optional[str] = settings.DEFAULT_PROMPT_KEY
     save_prompts: bool = False
     exchanges: Optional[str] = settings.DEFAULT_EXCHANGES
+    country: Optional[str] = settings.DEFAULT_COUNTRY
     news_summary_max_chars: Optional[int] = settings.NEWS_SUMMARY_MAX_CHARS
     max_recent_articles: Optional[int] = settings.MAX_RECENT_ARTICLES
 
