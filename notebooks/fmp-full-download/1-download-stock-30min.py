@@ -17,7 +17,7 @@ MARKET_CAP_THRESHOLD = 1_000_000_000
 # Concurrent workers for API requests
 MAX_WORKERS = 20
 # Set to True to re-download existing files
-OVERWRITE = True 
+OVERWRITE = False 
 
 # --- DATE RANGE ---
 # Working backwards from the requested end date

@@ -408,6 +408,33 @@ class FMPClient(BaseDataFetcher):
             return data["historical"]
         return data if isinstance(data, list) else []
 
+    async def fetch_historical_market_cap(
+        self,
+        ticker: str,
+        limit: int = 5000,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Fetches historical market capitalization data."""
+        endpoint = "historical-market-capitalization"
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {
+            "symbol": ticker.upper(),
+            "limit": limit
+        }
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = to_date
+        
+        data = await self.fetch_with_cache(
+            endpoint_name=endpoint,
+            ticker=ticker,
+            url=url,
+            params=params
+        )
+        return data if data else []
+
     async def fetch_income_statement_bulk(
         self,
         year: int,

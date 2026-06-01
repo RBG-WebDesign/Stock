@@ -49,6 +49,7 @@ data/charts/*
 data/payloads/*
 data/raw/*
 data/reports/*
+data/historical-market-cap/*
 
 # Keep the directory structure if empty dirs are committed
 !.gitkeep
