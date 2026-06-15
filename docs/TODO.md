@@ -1,2 +1,1 @@
-More prompts to support different strategies. 
-More versatile generate report display functionality to support visualizing the various LLM output schema for the different prompts and strategies. Currently we have a catch all line wrapping section which works okay but lacks some nice formatting.
+Implement new strategies.

@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -23,6 +24,7 @@ class SessionLogger:
         
         self.prompts_log_path = self.session_dir / "prompts_debug.jsonl"
         self.config_log_path = self.session_dir / "run_config.json"
+        self._config_lock = threading.Lock()
         
         # Funnel metrics tracking
         self.funnel_stats = {
@@ -47,8 +49,9 @@ class SessionLogger:
         full_config = {**config, "funnel_stats": self.funnel_stats}
         
         def write_config():
-            with open(self.config_log_path, "w") as f:
-                json.dump(full_config, f, indent=2)
+            with self._config_lock:
+                with open(self.config_log_path, "w") as f:
+                    json.dump(full_config, f, indent=2)
         
         await asyncio.to_thread(write_config)
         self.logger.info(f"Configuration saved to {self.config_log_path}")
@@ -62,11 +65,12 @@ class SessionLogger:
         if self.config_log_path.exists():
             def persist():
                 try:
-                    with open(self.config_log_path, "r") as f:
-                        config = json.load(f)
-                    config["funnel_stats"] = self.funnel_stats
-                    with open(self.config_log_path, "w") as f:
-                        json.dump(config, f, indent=2)
+                    with self._config_lock:
+                        with open(self.config_log_path, "r") as f:
+                            config = json.load(f)
+                        config["funnel_stats"] = self.funnel_stats
+                        with open(self.config_log_path, "w") as f:
+                            json.dump(config, f, indent=2)
                 except Exception as e:
                     self.logger.error(f"Failed to auto-persist funnel stats: {e}")
             
