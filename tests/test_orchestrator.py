@@ -32,7 +32,7 @@ async def test_orchestrator_parallel_analysis():
     with patch("src.tqa.llm.orchestrator.OpenRouterClient") as MockClient:
         mock_instance = MockClient.return_value
         mock_instance.__aenter__.return_value = mock_instance
-        mock_instance.analyze_ticker = AsyncMock(return_value=mock_analysis)
+        mock_instance.analyze_ticker = AsyncMock(return_value=(mock_analysis, "mock_prompt"))
         
         # Mock _save_report to avoid file I/O
         with patch.object(AnalysisOrchestrator, "_save_report", new_callable=AsyncMock) as mock_save:
@@ -64,17 +64,17 @@ async def test_robust_parsing():
     
     # Test with markdown blocks
     content = "```json\n{\"ticker\": \"AAPL\", \"primary_pattern\": \"Pattern\", \"fundamental_catalyst\": \"Catalyst\", \"suggested_entry_pivot\": 100, \"suggested_stop_loss\": 90, \"confidence_score\": 7, \"bull_case\": \"Bull\", \"bear_case_risks\": \"Bear\"}\n```"
-    result = client._parse_and_validate(content, "AAPL")
+    result = await client._parse_and_validate(content, "AAPL", MasterAnalystOutput)
     assert result is not None
     assert result.ticker == "AAPL"
 
     # Test with plain JSON
     content = "{\"ticker\": \"MSFT\", \"primary_pattern\": \"Pattern\", \"fundamental_catalyst\": \"Catalyst\", \"suggested_entry_pivot\": 100, \"suggested_stop_loss\": 90, \"confidence_score\": 7, \"bull_case\": \"Bull\", \"bear_case_risks\": \"Bear\"}"
-    result = client._parse_and_validate(content, "MSFT")
+    result = await client._parse_and_validate(content, "MSFT", MasterAnalystOutput)
     assert result is not None
     assert result.ticker == "MSFT"
 
     # Test with malformed JSON
     content = "invalid json"
-    result = client._parse_and_validate(content, "INVALID")
+    result = await client._parse_and_validate(content, "INVALID", MasterAnalystOutput)
     assert result is None

@@ -210,8 +210,25 @@ def _calculate_growth_metrics(income_statements: List[Dict[str, Any]]) -> Dict[s
     latest_period = latest.get("period")
     latest_year = latest.get("fiscalYear")
     
-    if latest_period and latest_year:
-        year_ago_q = next((s for s in income_statements if s.get("period") == latest_period and s.get("fiscalYear") == latest_year - 1), None)
+    # Safely cast latest_year to int
+    if latest_year is not None:
+        try:
+            latest_year = int(latest_year)
+        except (ValueError, TypeError):
+            latest_year = None
+    
+    if latest_period and latest_year is not None:
+        year_ago_q = None
+        for s in income_statements:
+            s_year = s.get("fiscalYear")
+            if s_year is not None:
+                try:
+                    s_year = int(s_year)
+                except (ValueError, TypeError):
+                    continue
+                if s.get("period") == latest_period and s_year == latest_year - 1:
+                    year_ago_q = s
+                    break
         
         if year_ago_q:
             if latest.get("eps") is not None and year_ago_q.get("eps") is not None and year_ago_q["eps"] != 0:

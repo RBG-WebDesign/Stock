@@ -143,6 +143,13 @@ class SessionLogger:
     def log_error(self, message: str):
         self.logger.error(message)
 
+    def close(self):
+        """Closes and removes all handlers to release resources and file locks."""
+        handlers = list(self.logger.handlers)
+        for h in handlers:
+            h.close()
+            self.logger.removeHandler(h)
+
 # Global session instance (optional, can be initialized in main.py)
 session: Optional[SessionLogger] = None
 
@@ -150,3 +157,4 @@ def init_session(session_id: Optional[str] = None) -> SessionLogger:
     global session
     session = SessionLogger(session_id)
     return session
+

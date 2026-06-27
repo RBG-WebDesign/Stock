@@ -82,7 +82,7 @@ async def test_analyze_ticker_mock(monkeypatch):
     monkeypatch.setattr("aiohttp.ClientSession", lambda: MockSession())
 
     client = OpenRouterClient(api_key="test_key")
-    result = await client.analyze_ticker(
+    result, prompt = await client.analyze_ticker(
         ticker="AAPL",
         fundamentals={"some": "data"},
         chart_paths={"daily": str(DUMMY_DAILY), "weekly": str(DUMMY_WEEKLY)}
@@ -91,6 +91,7 @@ async def test_analyze_ticker_mock(monkeypatch):
     assert isinstance(result, MasterAnalystOutput)
     assert result.ticker == "AAPL"
     assert result.confidence_score == 8
+    assert isinstance(prompt, str)
 
 if __name__ == "__main__":
     # Simple manual run

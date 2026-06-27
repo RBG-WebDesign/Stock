@@ -79,6 +79,12 @@ class Settings(BaseSettings):
         description="Number of recent news articles to include in LLM payload"
     )
 
+    # --- Alpaca Execution Settings ---
+    ALPACA_API_KEY_ID: str = Field(default="", description="Alpaca API Key ID")
+    ALPACA_API_SECRET_KEY: str = Field(default="", description="Alpaca API Secret Key")
+    ALPACA_ENDPOINT: str = Field(default="https://paper-api.alpaca.markets/v2", description="Alpaca API Endpoint")
+    ALPACA_TRADE_ALLOCATION_USD: float = Field(default=1000.0, description="USD allocation per trade")
+
     # --- Directory Paths ---
     # These are used for our isolated file-based caching strategy
     RAW_DATA_DIR: Path = DATA_DIR / "raw"

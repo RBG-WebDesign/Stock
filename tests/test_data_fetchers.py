@@ -1,6 +1,7 @@
 # tests/test_data_fetchers.py
 import asyncio
 import os
+import pytest
 from dotenv import load_dotenv
 from tqa.data_fetchers.fmp import FMPClient
 from tqa.utils.logger import logger
@@ -8,6 +9,7 @@ from tqa.utils.logger import logger
 # Load environment variables for the API key
 load_dotenv()
 
+@pytest.mark.asyncio
 async def test_fmp_client():
     """
     Integration test for the refined FMPClient.

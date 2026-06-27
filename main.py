@@ -673,6 +673,107 @@ def scan(
         if session_id:
             console.print(f"\n[bold green]Scan complete. Triggering automatic report generation...[/bold green]")
             report(session_id=session_id, interactive=False)
+            
+            # --- Alpaca Paper Trading Execution ---
+            async def run_alpaca_execution():
+                session_dir = settings.REPORTS_DIR / "runs" / session_id
+                prompts_path = session_dir / "prompts_debug.jsonl"
+                
+                # Verify settings are configured and not placeholder
+                if not settings.ALPACA_API_KEY_ID or not settings.ALPACA_API_SECRET_KEY or settings.ALPACA_API_SECRET_KEY == "your_alpaca_secret_key_here":
+                    console.print("\n[bold yellow]ℹ Alpaca paper trading keys not fully configured in .env. Skipping execution step.[/bold yellow]")
+                    return
+                
+                if not prompts_path.exists():
+                    console.print("\n[bold yellow]ℹ No watchlist candidates found in session. Skipping Alpaca execution.[/bold yellow]")
+                    return
+                
+                candidates = []
+                with open(prompts_path, "r") as f:
+                    for line in f:
+                        try:
+                            candidates.append(json.loads(line))
+                        except:
+                            continue
+                
+                if not candidates:
+                    console.print("\n[bold yellow]ℹ Watchlist is empty. Skipping Alpaca execution.[/bold yellow]")
+                    return
+                
+                valid_orders = []
+                for c in candidates:
+                    ticker = c.get("ticker")
+                    profile = c.get("profile", {})
+                    response = c.get("response", {})
+                    
+                    price = profile.get("price")
+                    if not price and c.get("historical"):
+                        price = c["historical"][0].get("close")
+                        
+                    entry = response.get("suggested_entry_pivot")
+                    if not entry or entry == "N/A":
+                        entry = price
+                    
+                    stop = response.get("suggested_stop_loss")
+                    if not stop or stop == "N/A":
+                        stop = entry * 0.92
+                        
+                    tp = entry * 1.20
+                    
+                    if entry and stop and entry > stop:
+                        valid_orders.append({
+                            "symbol": ticker,
+                            "entry": float(entry),
+                            "stop": float(stop),
+                            "tp": float(tp)
+                        })
+                
+                if not valid_orders:
+                    console.print("\n[bold yellow]ℹ No valid orders to submit. Skipping Alpaca execution.[/bold yellow]")
+                    return
+                
+                console.print(f"\n[bold cyan]💼 Alpaca Paper Trading Execution ({len(valid_orders)} setups)[/bold cyan]")
+                for o in valid_orders:
+                    console.print(f"  - [cyan]{o['symbol']}[/cyan]: Entry Limit @ [green]${o['entry']:.2f}[/green] | TP: [green]${o['tp']:.2f}[/green] | SL: [red]${o['stop']:.2f}[/red]")
+                
+                should_execute = False
+                if not skip_prompts:
+                    should_execute = questionary.confirm("Submit these paper trades to Alpaca?", default=True).ask()
+                else:
+                    should_execute = True
+                
+                if should_execute:
+                    from tqa.execution.alpaca import AlpacaClient
+                    console.print("[yellow]Connecting to Alpaca and submitting bracket orders...[/yellow]")
+                    async with AlpacaClient() as alpaca:
+                        acc = await alpaca.get_account_info()
+                        if not acc:
+                            console.print("[bold red]Error authenticating with Alpaca. Check credentials.[/bold red]")
+                            return
+                        
+                        for o in valid_orders:
+                            qty = int(settings.ALPACA_TRADE_ALLOCATION_USD / o["entry"])
+                            if qty <= 0:
+                                qty = 1
+                            
+                            res = await alpaca.submit_bracket_order(
+                                symbol=o["symbol"],
+                                entry_price=o["entry"],
+                                stop_loss=o["stop"],
+                                take_profit=o["tp"],
+                                qty=qty
+                            )
+                            if res:
+                                console.print(f"[bold green]✓ Order placed successfully for {o['symbol']}[/bold green] (ID: {res.get('id')})")
+                            else:
+                                console.print(f"[bold red]✗ Failed to place order for {o['symbol']}[/bold red]")
+
+            try:
+                # If there's an active loop, we run it as a future task, otherwise asyncio.run
+                loop = asyncio.get_running_loop()
+                loop.create_task(run_alpaca_execution())
+            except RuntimeError:
+                asyncio.run(run_alpaca_execution())
 
     except KeyboardInterrupt:
         console.print("\n[bold red]Aborted by user.[/bold red]")

@@ -5,16 +5,28 @@ import shutil
 import pytest
 from tqa.utils.session_logger import SessionLogger
 
+from config.settings import settings
+
 @pytest.mark.asyncio
 async def test_session_logger_concurrency():
-    # Initialize SessionLogger with a unique test session ID
-    session_id = "test_concurrency_session"
-    session = SessionLogger(session_id=session_id)
-    
     # Ensure any existing run directory for this test is clean
-    if session.session_dir.exists():
-        shutil.rmtree(session.session_dir)
-    session.session_dir.mkdir(parents=True, exist_ok=True)
+    session_id = "test_concurrency_session"
+    session_dir = settings.REPORTS_DIR / "runs" / session_id
+    if session_dir.exists():
+        try:
+            shutil.rmtree(session_dir)
+        except Exception:
+            # If still locked from previous crashes, try to close logging handles
+            import logging
+            for logger_name in list(logging.Logger.manager.loggerDict.keys()):
+                if logger_name.startswith("session."):
+                    logger = logging.getLogger(logger_name)
+                    for h in list(logger.handlers):
+                        h.close()
+                        logger.removeHandler(h)
+            shutil.rmtree(session_dir)
+            
+    session = SessionLogger(session_id=session_id)
     
     try:
         # Write initial configuration
@@ -59,5 +71,6 @@ async def test_session_logger_concurrency():
         assert "final_watchlist_count" in config["funnel_stats"]
     finally:
         # Cleanup
+        session.close()
         if session.session_dir.exists():
             shutil.rmtree(session.session_dir)
